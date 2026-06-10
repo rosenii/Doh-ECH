@@ -493,7 +493,18 @@ async function resolveDomainToIp(domain, type = 1) {
     }
     return [];
 }
-
+// ========== 工具函数 ==========
+function parseIpList(raw) {
+    if (!raw) return [];
+    raw = raw.trim();
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+        try {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) return arr.map(String).filter(s => s);
+        } catch {}
+    }
+    return raw.split(',').map(s => s.trim()).filter(s => s);
+}
 // ========== ECH 获取（带内存缓存，上游查询已被 Edge 缓存）==========
 async function fetchRealEch(echDomain) {
     const cacheKey = `ech:${echDomain}`;
