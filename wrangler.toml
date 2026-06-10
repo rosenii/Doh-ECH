@@ -1,0 +1,4 @@
+name = "ech"
+main = "worker.js"
+compatibility_date = "2026-06-04"
+keep_vars = true
