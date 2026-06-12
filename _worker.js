@@ -19,7 +19,7 @@ const CF_STATIC_DOMAINS = [
     "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"
 ];
 const DEFAULT_CF_IP = "104.18.10.118";   // Cloudflare 默认优选 IP
-
+const DEFAULT_CF_IP6 = "2606:4700::6812:a76"; 
 // ========== 静态 Meta 域名 ==========
 const META_DOMAINS = [
     "facebook.com", "messenger.com", "instagram.com",
