@@ -455,18 +455,10 @@ async function resolveDNS(domain, type, config) {
     let ipv6Hints = [];
     if (type === 'HTTPS' && (owner === 'CF' || owner === 'META')) {
     // 分别查询，避免 AAAA 失败影响 IPv4
-    const [aResult, aaaaResult] = await Promise.allSettled([
-        queryUpstreamDNS(domain, 1),
-        queryUpstreamDNS(domain, 28)
-    ]);
-
-    if (aResult.status === 'fulfilled' && aResult.value?.Answer) {
-        ipv4Hints = aResult.value.Answer.filter(r => r.type === 1).map(r => r.data);
-    }
-    if (aaaaResult.status === 'fulfilled' && aaaaResult.value?.Answer) {
-        ipv6Hints = aaaaResult.value.Answer.filter(r => r.type === 28).map(r => r.data);
-    }
-
+        const [aHints, aaaaHints] = await Promise.all([
+            queryUpstreamDNS(domain, 1).then(d => d?.Answer?.filter(r => r.type === 1).map(r => r.data) || []).catch(() => []),
+            queryUpstreamDNS(domain, 28).then(d => d?.Answer?.filter(r => r.type === 28).map(r => r.data) || []).catch(() => [])
+        ]);
     ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
     ipv6Hints = [...new Set(ipv6Hints)].slice(0, 3);
     }
