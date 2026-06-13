@@ -77,11 +77,11 @@
   ```
 - **配置 DoH 客户端**：  
   将 DoH 地址设置为 `https://你的域名/ech`（注入 ECH）或 `/doh`（纯净转发），并可通过请求头或 URL 参数传递自定义 IP。
-####  示例
+####  doh地址
 ```bash
-# DOH地址
  "https://your-domain.pages.dev/ech?cf=ip.sb&ip4=1.2.3.4,5.6.7.8&ip6=::&MetaIp4=5.6.7.8"
 ---
+
 ## 📡 API 示例
 
 ### JSON API
