@@ -20,7 +20,7 @@ const CF_STATIC_DOMAINS = [
 ];
 // 仅 IPv4 的域名（不返回 AAAA 记录）
 const IPV4_ONLY_DOMAINS = [
-    "twitter.com", "x.com", "t.co", "twimg.com"
+    "twitter.com", "x.com", "t.co", "twimg.com","cloudflare-ech.com"
 ];
 const DEFAULT_CF_IP = "104.18.10.118";   // Cloudflare 默认优选 IP
 const DEFAULT_CF_IP6 = "2606:4700::6812:a76"; 
