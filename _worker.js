@@ -617,11 +617,11 @@ function parseHttpsRecord(dataStr) {
 // ========== 带 Hints 的 HTTPS 记录打包 ==========
 function packHttpsParamsWithHints(priority, target, params, ipv4Hints, ipv6Hints) {
     if (ipv4Hints && ipv4Hints.length > 0) {
-        const unique = [...new Set(ipv4Hints)];
+        const unique = [...new Set(ipv4Hints)].slice(0,4);
         params.push({ key: 'ipv4hint', val: unique.join(',') });
     }
     if (ipv6Hints && ipv6Hints.length > 0) {
-        const unique = [...new Set(ipv6Hints)];
+        const unique = [...new Set(ipv6Hints)].slice(0,4);
         params.push({ key: 'ipv6hint', val: unique.join(',') });
     }
     return packHttpsParams(priority, target, params);
