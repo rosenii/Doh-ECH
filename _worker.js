@@ -1069,7 +1069,7 @@ function getHtml() {
             font-size: 1.3rem;
         }
         h1 { 
-            font-size: 1.5rem; 
+            font-size: 1.7rem; 
             font-weight: 700;
             background: linear-gradient(135deg, var(--accent), #a78bfa);
             -webkit-background-clip: text;
@@ -1078,7 +1078,7 @@ function getHtml() {
         }
         .subtitle { 
             color: var(--text-secondary); 
-            font-size: 0.7rem; 
+            font-size: 0.74rem; 
             margin-bottom: 2rem;
             margin-left: 52px;
         }
@@ -1240,7 +1240,7 @@ function getHtml() {
                 <label for="mode">优选模式</label>
                 <select id="mode" onchange="onModeChange()">
                     <option value="">无 (默认解析)</option>
-                    <option value="cf">🌥️ Cloudflare 优选</option>
+                    <option value="cf">🌥️ CF 优选</option>
                     <option value="meta">🔵 Meta 优选</option>
                 </select>
             </div>
@@ -1253,7 +1253,7 @@ function getHtml() {
                 <input type="text" id="ip4" placeholder="1.2.3.4, 5.6.7.8">
                 <label>Cloudflare IPv6 <span class="badge badge-cf">ip6</span></label>
                 <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
-                <label>解析域名获取 IP <span class="badge badge-cf">cf</span></label>
+                <label>优选域名 <span class="badge badge-cf">cf</span></label>
                 <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 <label>ECH来源 外层SNI<span class="badge badge-cf">ech</span></label>
                 <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
