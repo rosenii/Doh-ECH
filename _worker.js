@@ -452,7 +452,7 @@ async function resolveDNS(domain, type, config) {
                 ipv6Hints = aaaaData.Answer.filter(r => r.type === 28).map(r => r.data).slice(0,3);
             }
         } else {
-            answers = data.Answer.filter(r => r.type === dnsType).map(r => r.data).slice(0,4);
+            answers = data.Answer.filter(r => r.type === dnsType).map(r => r.data);
         }
     }
 
