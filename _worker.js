@@ -1222,7 +1222,7 @@ function getHtml() {
             <div class="logo">🔒</div>
             <h1>DOH-ECH 查询</h1>
         </div>
-        <p class="subtitle">智能 DNS 解析 · ECH 注入 · IP Hints</p>
+        <p class="subtitle">智能 DNS 解析 · ECH 注入 · 优选域名&IP</p>
 
         <label for="domain">查询域名</label>
         <input type="text" id="domain" placeholder="输入域名，例如 twitter.com" value="twitter.com" autofocus>
@@ -1240,7 +1240,7 @@ function getHtml() {
                 <label for="mode">优选模式</label>
                 <select id="mode" onchange="onModeChange()">
                     <option value="">无 (默认解析)</option>
-                    <option value="cf">🔶 Cloudflare 优选</option>
+                    <option value="cf">🌥️ Cloudflare 优选</option>
                     <option value="meta">🔵 Meta 优选</option>
                 </select>
             </div>
@@ -1255,7 +1255,7 @@ function getHtml() {
                 <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
                 <label>解析域名获取 IP <span class="badge badge-cf">cf</span></label>
                 <input type="text" id="cfDomain" placeholder="example.com, example2.com">
-                <label>ECH 来源域名</label>
+                <label>ECH来源 外层SNI<span class="badge badge-cf">ech</span></label>
                 <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
             </div>
         </div>
@@ -1275,7 +1275,7 @@ function getHtml() {
         </button>
 
         <div id="result" class="result-box" style="display: none;"></div>
-        <div class="footer">Total-ECH · Cloudflare Pages</div>
+        <div class="footer">@rosenii · DOH-ECH · Cloudflare Pages</div>
     </div>
 
     <script>
