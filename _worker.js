@@ -903,13 +903,13 @@ function getHtml() {
         }
         input, select {
             width: 100%;
-            padding: 0.74rem 1rem;
+            padding: 0.76rem 1rem;
             margin-bottom: 1.2rem;
             background: var(--input-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
             color: var(--text);
-            font-size: 0.95rem;
+            font-size: 0.75rem;
             transition: border-color 0.2s, box-shadow 0.2s;
             font-family: inherit;
         }
@@ -1024,7 +1024,7 @@ function getHtml() {
             <div class="logo">🔒</div>
             <h1>DOH-ECH 查询</h1>
         </div>
-        <p class="subtitle">智能 DNS 解析 · ECH 注入 · IP Hints</p>
+        <p class="subtitle">智能 DNS 解析 · ECH 注入 · 优选域名&IP</p>
         <label for="domain">查询域名</label>
         <input type="text" id="domain" placeholder="输入域名，例如 twitter.com" value="twitter.com" autofocus>
         <div class="row">
@@ -1055,7 +1055,7 @@ function getHtml() {
                 <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 <label>ECH 外层SNI域名 <span class="badge badge-cf">ech</span></label>
                 <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
-                <label>非静态域名跟随优选</label>
+                <label>非静态域名列表跟随优选  <span class="badge badge-cf">best</span></label>
                 <select id="best">
                     <option value="false">否 (仅静态域名)</option>
                     <option value="true">是 (所有 CF 域名)</option>
