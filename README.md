@@ -4,6 +4,29 @@
 
 ---
 
+## 部署步骤
+
+### 1. 准备 CIDR 列表/已列出
+编辑 `_worker.js`，找到 `RAW_META_CIDRS` 和 `RAW_CF_CIDRS` 数组，将您的完整 CIDR 列表填入（若不需要归属探测可保留空数组）。  
+**Cloudflare IPv4 官方列表**：[https://www.cloudflare.com/ips-v4](https://www.cloudflare.com/ips-v4)
+
+### 2. 部署到 Cloudflare Pages
+- 进入 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → **创建项目**。
+- 上传资产或连接 Git 仓库，上传 `_worker.js` 至项目根目录。
+- 无需设置构建命令或输出目录（Pages 会自动识别单文件 Worker）。
+- 部署完成后访问分配的域名即可。
+
+### 3. 使用方法
+- **网页查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
+- **DOH地址示例**：  
+  ```
+   "https://your-domain.pages.dev/ech?cf=ip.sb&ip4=1.2.3.4,5.6.7.8&ip6=::&MetaIp4=5.6.7.8"
+  ```
+- **配置 DoH 客户端**：  
+  1.将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义 IP。
+  2.使用代理工具：将需要直连的CF站点的域名解析服务器doh设置为`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义 IP。
+  
+---
 ## 特性
 
 - ✅ **DoH 服务**  
@@ -56,29 +79,6 @@
 > **注意**：`cf` 参数仅当目标域名为 Cloudflare 站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF 域名。
 
 ---
-
-## 部署步骤
-
-### 1. 准备 CIDR 列表/已列出
-编辑 `_worker.js`，找到 `RAW_META_CIDRS` 和 `RAW_CF_CIDRS` 数组，将您的完整 CIDR 列表填入（若不需要归属探测可保留空数组）。  
-**Cloudflare IPv4 官方列表**：[https://www.cloudflare.com/ips-v4](https://www.cloudflare.com/ips-v4)
-
-### 2. 部署到 Cloudflare Pages
-- 进入 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → **创建项目**。
-- 上传资产或连接 Git 仓库，上传 `_worker.js` 至项目根目录。
-- 无需设置构建命令或输出目录（Pages 会自动识别单文件 Worker）。
-- 部署完成后访问分配的域名即可。
-
-### 3. 使用方法
-- **网页查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
-- **DOH地址示例**：  
-  ```
-   "https://your-domain.pages.dev/ech?cf=ip.sb&ip4=1.2.3.4,5.6.7.8&ip6=::&MetaIp4=5.6.7.8"
-  ```
-- **配置 DoH 客户端**：  
-  将 DoH 地址设置为 `https://你的域名/ech`（注入 ECH）或 `/doh`（纯净转发），并可通过请求头或 URL 参数传递自定义 IP。
----
-
 ## 📡 API 示例
 
 ### JSON API
