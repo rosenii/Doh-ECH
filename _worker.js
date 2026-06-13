@@ -487,7 +487,7 @@ async function resolveDNS(domain, type, config) {
         else if (type === 'AAAA' && config.metaIp6) answers = parseIpList(config.metaIp6);
     }
 
-    const result = { domain, type, answers, ech: ech || null };
+    const result = { domain, type, answers, ech: ech,ipv4hints,ipv6hints || null };
     
     if (type === 'HTTPS') {
         if (ipv4Hints.length > 0) result.ipv4hints = ipv4Hints;
