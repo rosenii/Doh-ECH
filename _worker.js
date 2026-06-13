@@ -440,17 +440,6 @@ async function resolveDNS(domain, type, config) {
                 const parsed = parseHttpsRecord(rec.data);
                 if (parsed && parsed.ech) ech = parsed.ech;
             }
-            // 查询 A/AAAA 作为 hints
-            const [aData, aaaaData] = await Promise.all([
-                queryUpstreamDNS(domain, 1),
-                queryUpstreamDNS(domain, 28)
-            ]);
-            if (aData && aData.Answer) {
-                ipv4Hints = aData.Answer.filter(r => r.type === 1).map(r => r.data).slice(0,6);
-            }
-            if (aaaaData && aaaaData.Answer) {
-                ipv6Hints = aaaaData.Answer.filter(r => r.type === 28).map(r => r.data).slice(0,3);
-            }
         } else {
             answers = data.Answer.filter(r => r.type === dnsType).map(r => r.data);
         }
@@ -461,7 +450,23 @@ async function resolveDNS(domain, type, config) {
         if (owner === 'META') ech = META_ECH_CONFIG;
         else if (owner === 'CF') ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com');
     }
-
+    // 收集 hints（只要归属是 CF 或 Meta，就查询 A/AAAA，不依赖 HTTPS 记录）
+    let ipv4Hints = [];
+    let ipv6Hints = [];
+    if (type === 'HTTPS' && (owner === 'CF' || owner === 'META')) {
+        const [aData, aaaaData] = await Promise.all([
+            queryUpstreamDNS(domain, 1),
+            queryUpstreamDNS(domain, 28)
+        ]);
+        if (aData && aData.Answer) {
+            ipv4Hints = aData.Answer.filter(r => r.type === 1).map(r => r.data);
+        }
+        if (aaaaData && aaaaData.Answer) {
+            ipv6Hints = aaaaData.Answer.filter(r => r.type === 28).map(r => r.data);
+        }
+        ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
+        ipv6Hints = [...new Set(ipv6Hints)].slice(0, 3);
+    }
     // 自定义 IP 替换
     if (type === 'A' && config.ip4) {
         answers = parseIpList(config.ip4);
