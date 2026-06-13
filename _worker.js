@@ -210,10 +210,24 @@ async function resolveDNS(domain, type, config) {
     domain = domain.toLowerCase().replace(/\.$/, '');
     const best = config.best === 'true';
 
-    const isStaticCF = CF_STATIC_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
-    const isStaticMeta = META_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
-    const isStatic = isStaticCF || isStaticMeta;
+// 原始静态标志
+const origStaticCF = CF_STATIC_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
+const origStaticMeta = META_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 
+// 如果是非静态且 best=true，先做归属探测
+let effectiveCF = origStaticCF;
+let effectiveMeta = origStaticMeta;
+const best = config.best === 'true';
+
+if (!origStaticCF && !origStaticMeta && best) {
+    const probe = await activeProbeOwner(domain, null);
+    if (probe) {
+        if (probe.owner === 'CF') effectiveCF = true;
+        else if (probe.owner === 'META') effectiveMeta = true;
+    }
+}
+
+const isStatic = effectiveCF || effectiveMeta;
     let answers = [];
     let ech = null;
     let ipv4Hints = [];
@@ -223,7 +237,7 @@ async function resolveDNS(domain, type, config) {
     if (isStatic) {
         if (type === 'AAAA') {
             if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
-            if (isStaticMeta) return { domain, type, answers: config.metaIp6 ? parseIpList(config.metaIp6) : [], ech: null };
+            if (effectiveMeta) return { domain, type, answers: config.metaIp6 ? parseIpList(config.metaIp6) : [], ech: null };
             let ipList = [];
             if (config.ip6) ipList = parseIpList(config.ip6);
             else if (config.cfDomain) {
@@ -233,7 +247,7 @@ async function resolveDNS(domain, type, config) {
             return { domain, type, answers: ipList, ech: null };
         }
         if (type === 'HTTPS') {
-            if (isStaticCF) {
+            if (effectiveCF) {
                 if (config.ip4) ipv4Hints = parseIpList(config.ip4);
                 else if (config.cfDomain) {
                     const resolved = await resolveMultiDomainToIps(config.cfDomain, 1);
@@ -263,7 +277,7 @@ async function resolveDNS(domain, type, config) {
         }
         // A 记录
         let ipList = [];
-        if (isStaticCF) {
+        if (effectiveCF) {
             if (config.ip4) ipList = parseIpList(config.ip4);
             else if (config.cfDomain) {
                 const resolved = await resolveMultiDomainToIps(config.cfDomain, 1);
