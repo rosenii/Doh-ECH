@@ -337,38 +337,28 @@ async function resolveDNS(domain, type, config) {
     const isStaticCF = CF_STATIC_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
     const isStaticMeta = META_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 
+    let answers = [];
+    let ech = null;
+    let ipv4Hints = [];
+    let ipv6Hints = [];
+
+    // --- 静态域名 ---
     if (isStaticCF || isStaticMeta) {
-        // AAAA 处理
         if (type === 'AAAA') {
-            if (isDomainIpv4Only(domain)) {
-                return { domain, type, answers: [], ech: null };
-            }
+            if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
             if (isStaticMeta) {
-                return { 
-                    domain, type, 
-                    answers: config.metaIp6 ? parseIpList(config.metaIp6) : [], 
-                    ech: null 
-                };
+                return { domain, type, answers: config.metaIp6 ? parseIpList(config.metaIp6) : [], ech: null };
             }
-            if (isStaticCF) {
-                let ipList = [];
-                if (config.ip6) {
-                    ipList = parseIpList(config.ip6);
-                } else if (config.cfDomain) {
-                    const resolved = await resolveMultiDomainToIps(config.cfDomain, 28);
-                    if (resolved.length > 0) ipList = resolved.map(formatIPv6FromBytes);
-                } else {
-                    ipList = parseIpList(DEFAULT_CF_IP6);
-                }
-                return { domain, type, answers: ipList, ech: null };
-            }
-            return { domain, type, answers: [], ech: null };
+            let ipList = [];
+            if (config.ip6) ipList = parseIpList(config.ip6);
+            else if (config.cfDomain) {
+                const resolved = await resolveMultiDomainToIps(config.cfDomain, 28);
+                if (resolved.length > 0) ipList = resolved.map(formatIPv6FromBytes);
+            } else ipList = parseIpList(DEFAULT_CF_IP6);
+            return { domain, type, answers: ipList, ech: null };
         }
 
-        // HTTPS 处理（带 hints）
         if (type === 'HTTPS') {
-            let ech, ipv4Hints = [], ipv6Hints = [];
-            
             if (isStaticCF) {
                 if (config.ip4) ipv4Hints = parseIpList(config.ip4);
                 else if (config.cfDomain) {
@@ -383,39 +373,32 @@ async function resolveDNS(domain, type, config) {
                         if (resolved.length > 0) ipv6Hints = resolved.map(formatIPv6FromBytes);
                     } else ipv6Hints = parseIpList(DEFAULT_CF_IP6);
                 }
-                ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
-                ipv6Hints = [...new Set(ipv6Hints)].slice(0, 3);
                 ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com');
             } else {
                 if (config.metaIp4) ipv4Hints = parseIpList(config.metaIp4);
                 else ipv4Hints = [DEFAULT_META_IP];
-                
                 if (config.metaIp6) ipv6Hints = parseIpList(config.metaIp6);
-                ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
-                ipv6Hints = [...new Set(ipv6Hints)].slice(0, 3);
                 ech = META_ECH_CONFIG;
             }
+            ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
+            ipv6Hints = [...new Set(ipv6Hints)].slice(0, 6);
             
-            return { 
-                domain, type, 
-                answers: [], 
-                ech: ech || null,
-                ipv4hints: ipv4Hints.length > 0 ? ipv4Hints : undefined,
-                ipv6hints: ipv6Hints.length > 0 ? ipv6Hints : undefined
-            };
+            // 构建返回对象（正确的语法）
+            const result = { domain, type, answers: [] };
+            result.ech = ech || null;
+            if (ipv4Hints.length > 0) result.ipv4hints = ipv4Hints;
+            if (ipv6Hints.length > 0) result.ipv6hints = ipv6Hints;
+            return result;
         }
 
-        // A 记录处理
+        // A 记录
         let ipList = [];
         if (isStaticCF) {
-            if (config.ip4) {
-                ipList = parseIpList(config.ip4);
-            } else if (config.cfDomain) {
+            if (config.ip4) ipList = parseIpList(config.ip4);
+            else if (config.cfDomain) {
                 const resolved = await resolveMultiDomainToIps(config.cfDomain, 1);
                 if (resolved.length > 0) ipList = resolved.map(bytesToIp);
-            } else {
-                ipList = [DEFAULT_CF_IP];
-            }
+            } else ipList = [DEFAULT_CF_IP];
         } else {
             if (config.metaIp4) ipList = parseIpList(config.metaIp4);
             else ipList = [DEFAULT_META_IP];
@@ -423,15 +406,10 @@ async function resolveDNS(domain, type, config) {
         return { domain, type, answers: ipList, ech: null };
     }
 
-    // 非静态域名
+    // --- 非静态域名 ---
     const dnsType = type === 'HTTPS' ? 65 : (type === 'AAAA' ? 28 : 1);
     const data = await queryUpstreamDNS(domain, dnsType);
     if (!data) return { domain, type, error: '上游查询失败' };
-
-    let answers = [];
-    let ech = null;
-    let ipv4Hints = [];
-    let ipv6Hints = [];
 
     if (data.Answer) {
         if (type === 'HTTPS') {
@@ -445,47 +423,44 @@ async function resolveDNS(domain, type, config) {
         }
     }
 
+    // 归属探测
     const owner = await detectOwner(domain);
+
     if (!ech && type === 'HTTPS') {
         if (owner === 'META') ech = META_ECH_CONFIG;
         else if (owner === 'CF') ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com');
     }
-    // 收集 hints（只要归属是 CF 或 Meta，就查询 A/AAAA，不依赖 HTTPS 记录）
-    let ipv4Hints = [];
-    let ipv6Hints = [];
-    if (type === 'HTTPS' && (owner === 'CF' || owner === 'META')) {
-    // 分别查询，避免 AAAA 失败影响 IPv4
-        const [aHints, aaaaHints] = await Promise.all([
+
+    // 收集 hints（无论归属，只要 HTTPS 就查）
+    if (type === 'HTTPS') {
+        const [aRecs, aaaaRecs] = await Promise.all([
             queryUpstreamDNS(domain, 1).then(d => d?.Answer?.filter(r => r.type === 1).map(r => r.data) || []).catch(() => []),
             queryUpstreamDNS(domain, 28).then(d => d?.Answer?.filter(r => r.type === 28).map(r => r.data) || []).catch(() => [])
         ]);
-    ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
-    ipv6Hints = [...new Set(ipv6Hints)].slice(0, 3);
+        ipv4Hints = [...new Set(aRecs)].slice(0, 6);
+        ipv6Hints = [...new Set(aaaaRecs)].slice(0, 6);
     }
-    // 自定义 IP 替换
+
+    // 用户自定义 IP 替换
     if (type === 'A' && config.ip4) {
         answers = parseIpList(config.ip4);
     } else if (type === 'AAAA' && config.ip6) {
-        if (!isDomainIpv4Only(domain)) {
-            answers = parseIpList(config.ip6);
-        }
+        if (!isDomainIpv4Only(domain)) answers = parseIpList(config.ip6);
     } else if (owner === 'CF' && config.cfDomain) {
         const resolved = await resolveMultiDomainToIps(config.cfDomain, dnsType);
-        if (resolved.length > 0) {
-            answers = resolved.map(ip => dnsType === 1 ? bytesToIp(ip) : formatIPv6FromBytes(ip));
-        }
+        if (resolved.length > 0) answers = resolved.map(ip => dnsType === 1 ? bytesToIp(ip) : formatIPv6FromBytes(ip));
     } else if (owner === 'META') {
         if (type === 'A' && config.metaIp4) answers = parseIpList(config.metaIp4);
         else if (type === 'AAAA' && config.metaIp6) answers = parseIpList(config.metaIp6);
     }
 
-    const result = { domain, type, answers, ech: ech,ipv4hints,ipv6hints || null };
-    
+    // 构建返回对象
+    const result = { domain, type, answers: answers || [] };
+    result.ech = ech || null;
     if (type === 'HTTPS') {
         if (ipv4Hints.length > 0) result.ipv4hints = ipv4Hints;
         if (ipv6Hints.length > 0) result.ipv6hints = ipv6Hints;
     }
-    
     return result;
 }
 
