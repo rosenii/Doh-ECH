@@ -1078,7 +1078,7 @@ function getHtml() {
         }
         .subtitle { 
             color: var(--text-secondary); 
-            font-size: 0.85rem; 
+            font-size: 0.7rem; 
             margin-bottom: 2rem;
             margin-left: 52px;
         }
@@ -1099,7 +1099,7 @@ function getHtml() {
             border: 1px solid var(--border);
             border-radius: 10px;
             color: var(--text);
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             transition: border-color 0.2s, box-shadow 0.2s;
             font-family: inherit;
         }
