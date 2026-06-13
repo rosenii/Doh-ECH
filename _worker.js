@@ -311,7 +311,8 @@ async function resolveDNS(domain, type, config) {
     }
 
     // 归属探测（用于补充 ECH 和 hints）
-    const owner = await detectOwner(domain);
+    const probe = await activeProbeOwner(domain, null);
+    const owner = probe ? probe.owner : null;
 
     if (!ech && type === 'HTTPS') {
         if (owner === 'META') ech = META_ECH_CONFIG;
