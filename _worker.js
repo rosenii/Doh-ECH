@@ -16,7 +16,7 @@ const UPSTREAM_JSON_ALI = 'https://dns.alidns.com/resolve';
 // ========== 静态 Cloudflare 域名 ==========
 const CF_STATIC_DOMAINS = [
     "twimg.com", "twitter.com", "x.com", "t.co",
-    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"
+    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com","cloudflare-ech.com"
 ];
 // 仅 IPv4 的域名（不返回 AAAA 记录）
 const IPV4_ONLY_DOMAINS = [
