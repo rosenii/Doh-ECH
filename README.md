@@ -77,7 +77,7 @@
 | `meta`          | 解析优选域名（支持逗号分隔多域名）以获取替换 IP，**仅对 Meta相关域名生效**        | `example.com,ip2.example.com`       |
 | `ech`         | 获取CF公共ECH配置的域名（默认 `cloudflare-ech.com`）                                      | `cloudflare-ech.com`               |
 | `best` | `X-Best` | 全局跟随优选（`true`/`false`） | `true` |
-| `clintip` | `X-ClientIp` | 全局跟随优选（`/24`/``） | `::/26` |
+| `clintip` | `X-ClientIP` | 自定义ECS，默认自动获取（`/24`/``） | `::/26` |
 
 > **注意**：`cf` 参数仅当目标域名为 Cloudflare 站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF 域名。
 
