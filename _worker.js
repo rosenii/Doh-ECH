@@ -1,11 +1,13 @@
+
 /**
  * DOH-ECH 
- * - best 参数控制非静态域名优选
- * - 双上游竞速 + Edge 缓存
- * - CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
- * - HTTPS hints 复用归属探测 IP
+ * - 支持 ECS、clientIp 自定义
+ * - 支持CF/Meta 多域名优选、best 跟随优选
+ * - 支持注入ECH，完整iphints
+ * - 缓存时间 A/AAAA 300s，HTTPS  600s
  */
 
+// ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_DNS_ALI = 'https://dns.alidns.com/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
@@ -13,7 +15,7 @@ const UPSTREAM_JSON_ALI = 'https://dns.alidns.com/resolve';
 
 const CF_STATIC_DOMAINS = [
     "twimg.com", "twitter.com", "x.com", "t.co",
-    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com", "lss1.ccwu.cc"
+    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"
 ];
 const DEFAULT_CF_IP = "104.18.10.118";
 const DEFAULT_CF_IP6 = "2606:4700::6812:a76";
@@ -38,54 +40,60 @@ const RAW_CF_CIDRS = [
 ];
 
 const cacheMap = new Map();
-const CACHE_TTL = 3600 * 1000;
-const ECH_CACHE_TTL = 600 * 1000;
+const CACHE_TTL = 3600 * 1000;        // 归属缓存 1 小时
+const ECH_CACHE_TTL = 1200 * 1000;     // ECH 缓存 20 分钟
 
 let compiledMeta = null, compiledCF = null;
 function getCompiledMeta() { if (!compiledMeta) compiledMeta = compileCidrs(RAW_META_CIDRS); return compiledMeta; }
 function getCompiledCF()   { if (!compiledCF)   compiledCF   = compileCidrs(RAW_CF_CIDRS);   return compiledCF; }
 
+// ===================== Worker 入口 =====================
 export default {
     async fetch(req, env, ctx) {
         const url = new URL(req.url);
-        if (url.pathname === '/api/query') return handleApiQuery(url);
-        if (url.pathname === '/ech') return handleDoHRequest(req, true, ctx);
-        if (url.pathname === '/doh') return handleDoHRequest(req, false, ctx);
+        const clientIP = url.searchParams.get('clientIp')
+            || req.headers.get('X-Client-IP')
+            || req.headers.get('CF-Connecting-IP')
+            || '';
+        if (url.pathname === '/api/query') return handleApiQuery(url, clientIP);
+        if (url.pathname === '/ech') return handleDoHRequest(req, true, ctx, clientIP);
+        if (url.pathname === '/doh') return handleDoHRequest(req, false, ctx, clientIP);
         return new Response(getHtml(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 };
 
-// ========== DoH 处理 ==========
-async function handleDoHRequest(req, injectEch, ctx) {
+// ===================== DoH 处理 =====================
+async function handleDoHRequest(req, injectEch, ctx, clientIP) {
     const url = new URL(req.url);
     const config = {
-        ip4:      url.searchParams.get('ip4')     || req.headers.get('X-Ip4')     || '',
-        ip6:      url.searchParams.get('ip6')     || req.headers.get('X-Ip6')     || '',
-        metaIp4:  url.searchParams.get('metaIp4') || req.headers.get('X-MetaIp4') || '',
-        metaIp6:  url.searchParams.get('metaIp6') || req.headers.get('X-MetaIp6') || '',
-        cfDomain: url.searchParams.get('cf')      || req.headers.get('X-CF')      || '',
-        echDomain:url.searchParams.get('ech')    || req.headers.get('X-ECH')     || 'cloudflare-ech.com',
-        best:     url.searchParams.get('best')    || req.headers.get('X-Best')    || 'false'
+        ip4:        url.searchParams.get('ip4')     || req.headers.get('X-Ip4')     || '',
+        ip6:        url.searchParams.get('ip6')     || req.headers.get('X-Ip6')     || '',
+        metaIp4:    url.searchParams.get('metaIp4') || req.headers.get('X-MetaIp4') || '',
+        metaIp6:    url.searchParams.get('metaIp6') || req.headers.get('X-MetaIp6') || '',
+        cfDomain:   url.searchParams.get('cf')      || req.headers.get('X-CF')      || '',
+        metaDomain: url.searchParams.get('meta')    || req.headers.get('X-Meta')    || '',
+        echDomain:  url.searchParams.get('ech')     || req.headers.get('X-ECH')     || 'cloudflare-ech.com',
+        best:       url.searchParams.get('best')    || req.headers.get('X-Best')    || 'false'
     };
 
     if (req.method === 'POST') {
         const buf = await req.arrayBuffer();
-        if (injectEch) return handleDnsQuery(buf, config, ctx);
+        if (injectEch) return handleDnsQuery(buf, config, ctx, clientIP);
         const res = await forwardQuery(buf);
         return dnsResponse(await res.arrayBuffer());
     }
     if (req.method === 'GET' && url.searchParams.get('dns')) {
         const raw = url.searchParams.get('dns').replace(/ /g, '+').replace(/-/g, '+').replace(/_/g, '/');
         const buf = Uint8Array.from(atob(raw), c => c.charCodeAt(0)).buffer;
-        if (injectEch) return handleDnsQuery(buf, config, ctx);
+        if (injectEch) return handleDnsQuery(buf, config, ctx, clientIP);
         const res = await forwardQuery(buf);
         return dnsResponse(await res.arrayBuffer());
     }
     return new Response('OK', { status: 200, headers: { 'Access-Control-Allow-Origin': '*' } });
 }
 
-// ========== DNS 核心（ECH 注入） ==========
-async function handleDnsQuery(rawBuffer, config, ctx) {
+// ===================== DNS 核心（ECH 注入） =====================
+async function handleDnsQuery(rawBuffer, config, ctx, clientIP) {
     try {
         const query = parseDnsPacket(rawBuffer);
         if (!query || query.questions.length === 0) return forwardQuery(rawBuffer);
@@ -93,17 +101,17 @@ async function handleDnsQuery(rawBuffer, config, ctx) {
         const qType = questions[0].type;
         const qName = questions[0].name.toLowerCase().replace(/\.$/, "");
 
+        // 假名处理
         if (qName === "cf.ech" || qName === "fb.ech") {
             if (qType === 65) {
                 const randomTtl = Math.floor(Math.random() * (10800 - 7200 + 1)) + 7200;
+                let echRdata;
                 if (qName === "cf.ech") {
-                    const echRdata = await fetchCleanEchRdataWithHints(config, qName, ctx);
-                    return dnsResponse(createMultiAnsResponse(id, qName, 65, echRdata ? [echRdata] : [], echRdata ? randomTtl : 60));
+                    echRdata = await buildCFEchResponse(config, qName, clientIP);
+                } else {
+                    echRdata = await buildMetaEchResponse(config, qName, clientIP);
                 }
-                if (qName === "fb.ech") {
-                    const echRdata = await packMetaEchWithHints(qName, config);
-                    return dnsResponse(createMultiAnsResponse(id, qName, 65, [echRdata], randomTtl));
-                }
+                return dnsResponse(createMultiAnsResponse(id, qName, 65, echRdata ? [echRdata] : [], echRdata ? randomTtl : 60));
             } else {
                 return dnsResponse(createMultiAnsResponse(id, qName, qType, [], 3600));
             }
@@ -111,102 +119,66 @@ async function handleDnsQuery(rawBuffer, config, ctx) {
 
         const isStaticCF = CF_STATIC_DOMAINS.some(d => qName === d || qName.endsWith("." + d));
         const isStaticMeta = META_DOMAINS.some(d => qName === d || qName.endsWith("." + d));
-        const best = config.best === 'true';
 
-        // 静态域名直接处理
         if (isStaticCF || isStaticMeta) {
-            if (qType === 28) {
-                if (isDomainIpv4Only(qName)) return dnsResponse(createMultiAnsResponse(id, qName, 28, [], 3600));
-                if (isStaticMeta) {
-                    const ips = config.metaIp6 ? parseIpList(config.metaIp6) : [];
-                    return dnsResponse(createMultiAnsResponse(id, qName, 28, ips.map(ipv6ToBytes), 300));
-                }
-                let ipStrings = [];
-                if (config.ip6) ipStrings = parseIpList(config.ip6);
-                else if (config.cfDomain) {
-                    const ips = await resolveMultiDomainToIps(config.cfDomain, 28);
-                    if (ips.length > 0) ipStrings = ips.map(bytesToIp6);
-                } else ipStrings = parseIpList(DEFAULT_CF_IP6);
-                return dnsResponse(createMultiAnsResponse(id, qName, 28, ipStrings.map(ipv6ToBytes), 300));
-            }
-            if (qType === 65) {
-                if (isStaticCF) {
-                    const echRdata = await fetchCleanEchRdataWithHints(config, qName, ctx);
-                    return dnsResponse(createMultiAnsResponse(id, qName, 65, echRdata ? [echRdata] : [], echRdata ? 3600 : 60));
-                }
-                if (isStaticMeta) {
-                    const echRdata = await packMetaEchWithHints(qName, config);
-                    return dnsResponse(createMultiAnsResponse(id, qName, 65, [echRdata], 3600));
-                }
-            }
-            if (qType === 1) {
-                let ipStrings = [];
-                if (isStaticCF) {
-                    if (config.ip4) ipStrings = parseIpList(config.ip4);
-                    else if (config.cfDomain) {
-                        const ips = await resolveMultiDomainToIps(config.cfDomain, 1);
-                        if (ips.length > 0) ipStrings = ips.map(bytesToIp);
-                    } else ipStrings = [DEFAULT_CF_IP];
-                } else {
-                    if (config.metaIp4) ipStrings = parseIpList(config.metaIp4);
-                    else ipStrings = [DEFAULT_META_IP];
-                }
-                return dnsResponse(createMultiAnsResponse(id, qName, 1, ipStrings.map(ipToBytes), 300));
-            }
-            return forwardQuery(rawBuffer);
+            const result = await resolveDNS(qName, qType === 28 ? 'AAAA' : (qType === 65 ? 'HTTPS' : 'A'), config, clientIP);
+            return dnsResponseFromResult(id, qName, qType, result);
         }
 
-        // 非静态域名：调用 resolveDNS
-        const resolved = await resolveDNS(qName, qType === 28 ? 'AAAA' : (qType === 65 ? 'HTTPS' : 'A'), config);
+        // 非静态域名
+        const resolved = await resolveDNS(qName, qType === 28 ? 'AAAA' : (qType === 65 ? 'HTTPS' : 'A'), config, clientIP);
         if (resolved.error) return forwardQuery(rawBuffer);
-
-        if (qType === 65) {
-            const rdata = [];
-            if (resolved.ech) {
-                const ipv4 = resolved.ipv4hints || [];
-                const ipv6 = resolved.ipv6hints || [];
-                const params = [{ key: 'alpn', val: 'h2,h3' }, { key: 'ech', val: resolved.ech }];
-                const packed = packHttpsParamsWithHints(1, ".", params, ipv4, ipv6);
-                rdata.push(packed);
-            }
-            return dnsResponse(createMultiAnsResponse(id, qName, 65, rdata, rdata.length ? 300 : 60));
-        } else {
-            const bytes = qType === 28 ? ipv6ToBytes : ipToBytes;
-            const answers = resolved.answers.map(bytes);
-            return dnsResponse(createMultiAnsResponse(id, qName, qType, answers, 300));
-        }
+        return dnsResponseFromResult(id, qName, qType, resolved);
     } catch (e) {
         console.error(e);
         return forwardQuery(rawBuffer);
     }
 }
-// ========== JSON API ==========
-async function handleApiQuery(url) {
+
+function dnsResponseFromResult(id, qName, qType, result) {
+    if (qType === 65) {
+        const rdata = [];
+        if (result.ech) {
+            const params = [{ key: 'alpn', val: 'h2,h3' }, { key: 'ech', val: result.ech }];
+            const packed = packHttpsParamsWithHints(1, ".", params, result.ipv4hints || [], result.ipv6hints || []);
+            rdata.push(packed);
+        }
+        return dnsResponse(createMultiAnsResponse(id, qName, 65, rdata, rdata.length ? 300 : 60));
+    } else {
+        const bytes = qType === 28 ? ipv6ToBytes : ipToBytes;
+        const answers = (result.answers || []).map(bytes);
+        return dnsResponse(createMultiAnsResponse(id, qName, qType, answers, 300));
+    }
+}
+
+// ===================== JSON API =====================
+async function handleApiQuery(url, clientIP) {
     const domain = url.searchParams.get('domain');
     const type = url.searchParams.get('type')?.toUpperCase() || 'A';
     if (!domain) return json({ error: '缺少 domain' }, 400);
     if (!['A', 'AAAA', 'HTTPS'].includes(type)) return json({ error: '类型不支持' }, 400);
 
     const config = {
-        ip4:     url.searchParams.get('ip4')     || '',
-        ip6:     url.searchParams.get('ip6')     || '',
-        metaIp4: url.searchParams.get('metaIp4') || '',
-        metaIp6: url.searchParams.get('metaIp6') || '',
-        cfDomain:url.searchParams.get('cf')      || '',
-        echDomain:url.searchParams.get('ech')    || 'cloudflare-ech.com',
-        best:    url.searchParams.get('best')    || 'false'
+        ip4:        url.searchParams.get('ip4')     || '',
+        ip6:        url.searchParams.get('ip6')     || '',
+        metaIp4:    url.searchParams.get('metaIp4') || '',
+        metaIp6:    url.searchParams.get('metaIp6') || '',
+        cfDomain:   url.searchParams.get('cf')      || '',
+        metaDomain: url.searchParams.get('meta')    || '',
+        echDomain:  url.searchParams.get('ech')     || 'cloudflare-ech.com',
+        best:       url.searchParams.get('best')    || 'false'
     };
 
     try {
-        const result = await resolveDNS(domain, type, config);
+        const result = await resolveDNS(domain, type, config, clientIP);
         return json(result);
     } catch (e) {
         return json({ error: e.message }, 500);
     }
 }
 
-// ========== 核心：resolveDNS ==========
-async function resolveDNS(domain, type, config) {
+// ===================== 核心：resolveDNS =====================
+async function resolveDNS(domain, type, config, clientIP) {
     domain = domain.toLowerCase().replace(/\.$/, '');
     const best = config.best === 'true';
 
@@ -217,7 +189,7 @@ async function resolveDNS(domain, type, config) {
     let effectiveMeta = origStaticMeta;
 
     if (!origStaticCF && !origStaticMeta && best) {
-        const probe = await activeProbeOwner(domain, null);
+        const probe = await activeProbeOwner(domain, null, clientIP);
         if (probe) {
             if (probe.owner === 'CF') effectiveCF = true;
             else if (probe.owner === 'META') effectiveMeta = true;
@@ -226,75 +198,17 @@ async function resolveDNS(domain, type, config) {
 
     const isStatic = effectiveCF || effectiveMeta;
 
-    let answers = [];
-    let ech = null;
-    let ipv4Hints = [];
-    let ipv6Hints = [];
-
-    // ===== 静态域名处理（含 best 提升的） =====
     if (isStatic) {
-        if (type === 'AAAA') {
-            if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
-            if (effectiveMeta) {
-                return { domain, type, answers: config.metaIp6 ? parseIpList(config.metaIp6) : [], ech: null };
-            }
-            let ipList = [];
-            if (config.ip6) ipList = parseIpList(config.ip6);
-            else if (config.cfDomain) {
-                const resolved = await resolveMultiDomainToIps(config.cfDomain, 28);
-                if (resolved.length > 0) ipList = resolved.map(formatIPv6FromBytes);
-            } else ipList = parseIpList(DEFAULT_CF_IP6);
-            return { domain, type, answers: ipList, ech: null };
-        }
-        if (type === 'HTTPS') {
-            if (effectiveCF) {
-                if (config.ip4) ipv4Hints = parseIpList(config.ip4);
-                else if (config.cfDomain) {
-                    const resolved = await resolveMultiDomainToIps(config.cfDomain, 1);
-                    if (resolved.length > 0) ipv4Hints = resolved.map(bytesToIp);
-                } else ipv4Hints = [DEFAULT_CF_IP];
-                if (!isDomainIpv4Only(domain)) {
-                    if (config.ip6) ipv6Hints = parseIpList(config.ip6);
-                    else if (config.cfDomain) {
-                        const resolved = await resolveMultiDomainToIps(config.cfDomain, 28);
-                        if (resolved.length > 0) ipv6Hints = resolved.map(formatIPv6FromBytes);
-                    } else ipv6Hints = parseIpList(DEFAULT_CF_IP6);
-                }
-                ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com');
-            } else { // Meta
-                if (config.metaIp4) ipv4Hints = parseIpList(config.metaIp4);
-                else ipv4Hints = [DEFAULT_META_IP];
-                if (config.metaIp6) ipv6Hints = parseIpList(config.metaIp6);
-                ech = META_ECH_CONFIG;
-            }
-            ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
-            ipv6Hints = [...new Set(ipv6Hints)].slice(0, 6);
-            const result = { domain, type, answers: [] };
-            result.ech = ech || null;
-            if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
-            if (ipv6Hints.length) result.ipv6hints = ipv6Hints;
-            return result;
-        }
-        // A 记录
-        let ipList = [];
-        if (effectiveCF) {
-            if (config.ip4) ipList = parseIpList(config.ip4);
-            else if (config.cfDomain) {
-                const resolved = await resolveMultiDomainToIps(config.cfDomain, 1);
-                if (resolved.length > 0) ipList = resolved.map(bytesToIp);
-            } else ipList = [DEFAULT_CF_IP];
-        } else {
-            if (config.metaIp4) ipList = parseIpList(config.metaIp4);
-            else ipList = [DEFAULT_META_IP];
-        }
-        return { domain, type, answers: ipList, ech: null };
+        return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
     }
 
-    // ===== 非静态域名（绝不替换） =====
+    // 非静态域名：纯上游，不替换
     const dnsType = type === 'HTTPS' ? 65 : (type === 'AAAA' ? 28 : 1);
-    const upstreamData = await queryUpstreamDNS(domain, dnsType);
+    const upstreamData = await queryUpstreamDNS(domain, dnsType, clientIP);
     if (!upstreamData) return { domain, type, error: '上游查询失败' };
 
+    let answers = [];
+    let ech = null;
     if (upstreamData.Answer) {
         if (type === 'HTTPS') {
             const rec = upstreamData.Answer.find(r => r.type === 65);
@@ -307,38 +221,128 @@ async function resolveDNS(domain, type, config) {
         }
     }
 
-    const probe = await activeProbeOwner(domain, null);
-    const owner = probe ? probe.owner : null;
+    const owner = (await activeProbeOwner(domain, null, clientIP))?.owner || null;
 
     if (!ech && type === 'HTTPS') {
         if (owner === 'META') ech = META_ECH_CONFIG;
-        else if (owner === 'CF') ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com');
+        else if (owner === 'CF') ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
     }
 
+    let ipv4Hints = [], ipv6Hints = [];
     if (type === 'HTTPS' && (owner === 'CF' || owner === 'META')) {
         const [aData, aaaaData] = await Promise.all([
-            queryUpstreamDNS(domain, 1).catch(() => null),
-            queryUpstreamDNS(domain, 28).catch(() => null)
+            queryUpstreamDNS(domain, 1, clientIP).catch(() => null),
+            queryUpstreamDNS(domain, 28, clientIP).catch(() => null)
         ]);
-        if (aData && aData.Answer) {
-            ipv4Hints = aData.Answer.filter(r => r.type === 1).map(r => r.data);
-        }
-        if (aaaaData && aaaaData.Answer) {
-            ipv6Hints = aaaaData.Answer.filter(r => r.type === 28).map(r => r.data);
-        }
+        if (aData?.Answer) ipv4Hints = aData.Answer.filter(r => r.type === 1).map(r => r.data);
+        if (aaaaData?.Answer) ipv6Hints = aaaaData.Answer.filter(r => r.type === 28).map(r => r.data);
         ipv4Hints = [...new Set(ipv4Hints)].slice(0, 6);
         ipv6Hints = [...new Set(ipv6Hints)].slice(0, 6);
     }
 
-    const result = { domain, type, answers: answers || [] };
-    result.ech = ech || null;
+    const result = { domain, type, answers, ech: ech || null };
     if (type === 'HTTPS') {
         if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
         if (ipv6Hints.length) result.ipv6hints = ipv6Hints;
     }
     return result;
 }
-// ========== 工具函数 ==========
+
+// ===================== 统一静态域名处理 =====================
+async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) {
+    const owner = isCF ? 'CF' : 'META';
+
+    if (type === 'AAAA') {
+        if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
+        const ips = await applyIPPreference(
+            type,
+            isCF ? config.ip6 : config.metaIp6,
+            isCF ? config.cfDomain : config.metaDomain,
+            isCF ? DEFAULT_CF_IP6 : '',
+            clientIP
+        );
+        return { domain, type, answers: ips, ech: null };
+    }
+
+    if (type === 'HTTPS') {
+        const ipv4Hints = await collectHints(1, config, isCF, clientIP);
+        const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, isCF, clientIP) : [];
+        const ech = isCF ? await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP) : META_ECH_CONFIG;
+        const result = { domain, type, answers: [] };
+        result.ech = ech || null;
+        if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
+        if (ipv6Hints.length) result.ipv6hints = ipv6Hints;
+        return result;
+    }
+
+    // A 记录
+    const ips = await applyIPPreference(
+        type,
+        isCF ? config.ip4 : config.metaIp4,
+        isCF ? config.cfDomain : config.metaDomain,
+        isCF ? DEFAULT_CF_IP : DEFAULT_META_IP,
+        clientIP
+    );
+    return { domain, type, answers: ips, ech: null };
+}
+
+// 公共 IP 优选：自定义 IP > 多域名解析 > 默认 IP
+async function applyIPPreference(type, customIP, resolveDomain, defaultIP, clientIP) {
+    if (customIP) return parseIpList(customIP);
+    if (resolveDomain) {
+        const resolved = await resolveMultiDomainToIps(resolveDomain, type === 'AAAA' ? 28 : 1, clientIP);
+        if (resolved.length > 0) {
+            return resolved.map(ip => type === 'AAAA' ? formatIPv6FromBytes(ip) : bytesToIp(ip));
+        }
+    }
+    return defaultIP ? parseIpList(defaultIP) : [];
+}
+
+// 收集 HTTPS hints
+async function collectHints(type, config, isCF, clientIP) {
+    if (type === 1) {
+        if (isCF && config.ip4) return parseIpList(config.ip4);
+        if (!isCF && config.metaIp4) return parseIpList(config.metaIp4);
+        const resolveParam = isCF ? config.cfDomain : config.metaDomain;
+        if (resolveParam) {
+            const resolved = await resolveMultiDomainToIps(resolveParam, 1, clientIP);
+            if (resolved.length > 0) return resolved.map(bytesToIp);
+        }
+        return isCF ? [DEFAULT_CF_IP] : [DEFAULT_META_IP];
+    } else { // IPv6
+        if (isCF && config.ip6) return parseIpList(config.ip6);
+        if (!isCF && config.metaIp6) return parseIpList(config.metaIp6);
+        const resolveParam = isCF ? config.cfDomain : config.metaDomain;
+        if (resolveParam) {
+            const resolved = await resolveMultiDomainToIps(resolveParam, 28, clientIP);
+            if (resolved.length > 0) return resolved.map(formatIPv6FromBytes);
+        }
+        return isCF ? parseIpList(DEFAULT_CF_IP6) : [];
+    }
+}
+
+// ===================== 假名 ECH 打包 =====================
+async function buildCFEchResponse(config, domain, clientIP) {
+    const ipv4Hints = await collectHints(1, config, true, clientIP);
+    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, true, clientIP) : [];
+    const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
+    if (!ech) return null;
+    return packHttpsParamsWithHints(1, ".", [
+        { key: 'alpn', val: 'h2,h3' },
+        { key: 'ech', val: ech }
+    ], ipv4Hints, ipv6Hints);
+}
+
+async function buildMetaEchResponse(config, domain, clientIP) {
+    const ipv4Hints = await collectHints(1, config, false, clientIP);
+    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, false, clientIP) : [];
+    return packHttpsParamsWithHints(1, ".", [
+        { key: 'alpn', val: 'h2,h3' },
+        { key: 'ech', val: META_ECH_CONFIG }
+    ], ipv4Hints, ipv6Hints);
+}
+
+// ===================== 工具函数 =====================
 function parseIpList(raw) {
     if (!raw) return [];
     raw = raw.trim();
@@ -351,10 +355,10 @@ function parseIpList(raw) {
     return raw.split(',').map(s => s.trim()).filter(s => s);
 }
 
-async function resolveMultiDomainToIps(domainsStr, type) {
+async function resolveMultiDomainToIps(domainsStr, type, clientIP) {
     const domains = domainsStr.split(',').map(s => s.trim()).filter(s => s);
     if (domains.length === 0) return [];
-    const promises = domains.map(d => resolveDomainToIp(d, type));
+    const promises = domains.map(d => resolveDomainToIp(d, type, clientIP));
     const results = await Promise.allSettled(promises);
     const allIps = new Set();
     for (const res of results) {
@@ -366,28 +370,44 @@ async function resolveMultiDomainToIps(domainsStr, type) {
     else return Array.from(allIps).map(ipv6ToBytes);
 }
 
-async function resolveDomainToIp(domain, type = 1) {
-    const data = await queryUpstreamDNS(domain, type);
+async function resolveDomainToIp(domain, type = 1, clientIP) {
+    const data = await queryUpstreamDNS(domain, type, clientIP);
     if (data && data.Answer) {
         return data.Answer.filter(r => r.type === type).map(r => r.data);
     }
     return [];
 }
 
-async function queryUpstreamDNS(name, type) {
-    const params = `?name=${encodeURIComponent(name)}&type=${type}`;
-    const cacheKey = new Request(`https://dns-cache/${encodeURIComponent(name)}/${type}`);
+async function queryUpstreamDNS(name, type, clientIP = '') {
+    const params = new URLSearchParams({ name, type: String(type) });
+    let ecsCacheSuffix = '';
+    if (clientIP) {
+        if (clientIP.includes(':')) {
+            const prefix = clientIP.split(':').slice(0, 4).join(':') + '::/56';
+            params.set('edns_client_subnet', clientIP + '/56');
+            ecsCacheSuffix = '/56-' + prefix;
+        } else {
+            const parts = clientIP.split('.');
+            const prefix = parts.slice(0, 3).join('.') + '.0/24';
+            params.set('edns_client_subnet', clientIP + '/24');
+            ecsCacheSuffix = '/24-' + prefix;
+        }
+    }
+
+    const cacheKey = new Request(`https://dns-cache/${encodeURIComponent(name)}/${type}${ecsCacheSuffix}`);
     try {
         if (typeof caches !== 'undefined' && caches.default) {
             const cachedRes = await caches.default.match(cacheKey);
             if (cachedRes) return cachedRes.json();
         }
     } catch (e) {}
-    const urls = [UPSTREAM_JSON_GOOGLE + params, UPSTREAM_JSON_ALI + params];
+
+    const urls = [UPSTREAM_JSON_GOOGLE + '?' + params.toString(), UPSTREAM_JSON_ALI + '?' + params.toString()];
     const promises = urls.map(url =>
         fetch(url, { headers: { 'Accept': 'application/dns-json' } })
             .then(res => res.ok ? res.json() : Promise.reject())
     );
+
     let result;
     try {
         result = await Promise.any(promises);
@@ -398,6 +418,7 @@ async function queryUpstreamDNS(name, type) {
             else return null;
         } catch { return null; }
     }
+
     if (result && typeof caches !== 'undefined' && caches.default) {
         try {
             const maxAge = (type === 65) ? 600 : 300;
@@ -410,12 +431,12 @@ async function queryUpstreamDNS(name, type) {
     return result;
 }
 
-async function fetchRealEch(echDomain) {
+async function fetchRealEch(echDomain, clientIP) {
     const cacheKey = `ech:${echDomain}`;
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
     try {
-        const data = await queryUpstreamDNS(echDomain, 65);
+        const data = await queryUpstreamDNS(echDomain, 65, clientIP);
         if (data && data.Answer) {
             const rec = data.Answer.find(r => r.type === 65);
             if (rec) {
@@ -452,39 +473,6 @@ function packHttpsParamsWithHints(priority, target, params, ipv4Hints, ipv6Hints
         if (unique.length > 0) params.push({ key: 'ipv6hint', val: unique.join(',') });
     }
     return packHttpsParams(priority, target, params);
-}
-
-async function fetchCleanEchRdataWithHints(config, domain, ctx) {
-    let ipv4Hints = [], ipv6Hints = [];
-    if (config.ip4) ipv4Hints = parseIpList(config.ip4);
-    else if (config.cfDomain) {
-        const ips = await resolveMultiDomainToIps(config.cfDomain, 1);
-        if (ips.length > 0) ipv4Hints = ips.map(bytesToIp);
-    } else ipv4Hints = [DEFAULT_CF_IP];
-    if (!isDomainIpv4Only(domain)) {
-        if (config.ip6) ipv6Hints = parseIpList(config.ip6);
-        else if (config.cfDomain) {
-            const ips = await resolveMultiDomainToIps(config.cfDomain, 28);
-            if (ips.length > 0) ipv6Hints = ips.map(bytesToIp6);
-        } else ipv6Hints = parseIpList(DEFAULT_CF_IP6);
-    }
-    const realEch = await fetchRealEch(config.echDomain || 'cloudflare-ech.com');
-    if (!realEch) return null;
-    return packHttpsParamsWithHints(1, ".", [
-        { key: 'alpn', val: 'h2,h3' },
-        { key: 'ech', val: realEch }
-    ], ipv4Hints, ipv6Hints);
-}
-
-async function packMetaEchWithHints(domain, config) {
-    let ipv4Hints = [], ipv6Hints = [];
-    if (config.metaIp4) ipv4Hints = parseIpList(config.metaIp4);
-    else ipv4Hints = [DEFAULT_META_IP];
-    if (config.metaIp6) ipv6Hints = parseIpList(config.metaIp6);
-    return packHttpsParamsWithHints(1, ".", [
-        { key: 'alpn', val: 'h2,h3' },
-        { key: 'ech', val: META_ECH_CONFIG }
-    ], ipv4Hints, ipv6Hints);
 }
 
 function isDomainIpv4Only(domain) {
@@ -774,13 +762,13 @@ function setOwnerCache(name, owner, ctx) {
     cacheMap.set(name, { val: owner, expire: Date.now() + CACHE_TTL });
 }
 
-async function activeProbeOwner(domain, ctx) {
+async function activeProbeOwner(domain, ctx, clientIP) {
     const cacheKey = `owner:${domain}`;
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
 
     try {
-        const data = await queryUpstreamDNS(domain, 1);
+        const data = await queryUpstreamDNS(domain, 1, clientIP);
         if (data && data.Answer) {
             const ips = data.Answer.filter(r => r.type === 1).map(r => r.data);
             for (const ip of ips) {
@@ -797,10 +785,11 @@ async function activeProbeOwner(domain, ctx) {
             }
         }
     } catch {}
-    cacheMap.set(cacheKey, { value: null, expire: Date.now() + 60_000 });
+    cacheMap.set(cacheKey, { value: null, expire: Date.now() + 60000 });
     return null;
 }
-// ========== 前端页面 ==========
+
+// ===================== 前端页面 =====================
 function getHtml() {
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -838,7 +827,7 @@ function getHtml() {
             border-radius: 20px;
             padding: 2.5rem;
             width: 100%;
-            max-width: 560px;
+            max-width: 580px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
         }
         .header {
@@ -882,7 +871,7 @@ function getHtml() {
         }
         input, select {
             width: 100%;
-            padding: 0.76rem 1rem;
+            padding: 0.8rem 1rem;
             margin-bottom: 1.2rem;
             background: var(--input-bg);
             border: 1px solid var(--border);
@@ -995,6 +984,13 @@ function getHtml() {
             color: var(--text-secondary);
             font-size: 0.75rem;
         }
+        .global-section {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: var(--input-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
     </style>
 </head>
 <body>
@@ -1003,57 +999,65 @@ function getHtml() {
             <div class="logo">🔒</div>
             <h1>DOH-ECH 查询</h1>
         </div>
-        <p class="subtitle">智能 DNS 解析 · ECH 注入 · 优选域名&IP</p>
+        <p class="subtitle">智能 DNS 解析 · ECH 注入 · ECS 就近解析</p>
         <label for="domain">查询域名</label>
         <input type="text" id="domain" placeholder="输入域名，例如 twitter.com" value="twitter.com" autofocus>
-        <div class="row">
-            <div>
-                <label for="type">记录类型</label>
-                <select id="type">
-                    <option value="A">A (IPv4)</option>
-                    <option value="AAAA">AAAA (IPv6)</option>
-                    <option value="HTTPS">HTTPS (ECH)</option>
-                </select>
-            </div>
-            <div>
-                <label for="mode">优选模式</label>
-                <select id="mode" onchange="onModeChange()">
-                    <option value="">无 (默认解析)</option>
-                    <option value="cf">🔶 CF 优选</option>
-                    <option value="meta">🔵 Meta 优选</option>
-                </select>
-            </div>
-        </div>
-        <div id="cfParams" class="advanced-section">
-            <div class="param-group active" id="cfGroup">
-                <label>Cloudflare IPv4 <span class="badge badge-cf">ip4</span></label>
-                <input type="text" id="ip4" placeholder="1.2.3.4, 5.6.7.8">
-                <label>Cloudflare IPv6 <span class="badge badge-cf">ip6</span></label>
-                <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
-                <label>CF优选域名 <span class="badge badge-cf">cf</span></label>
-                <input type="text" id="cfDomain" placeholder="example.com, example2.com">
-                <label>ECH 外层SNI域名 <span class="badge badge-cf">ech</span></label>
-                <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
-                <label>非静态域名列表跟随优选  <span class="badge badge-cf">best</span></label>
-                <select id="best">
-                    <option value="false">否 (仅静态域名)</option>
-                    <option value="true">是 (所有 CF 域名)</option>
-                </select>
-            </div>
-        </div>
-        <div id="metaParams" class="advanced-section">
-            <div class="param-group active" id="metaGroup">
-                <label>Meta IPv4 <span class="badge badge-meta">metaIp4</span></label>
-                <input type="text" id="metaIp4" placeholder="157.240.1.1, 157.240.2.1">
-                <label>Meta IPv6 <span class="badge badge-meta">metaIp6</span></label>
-                <input type="text" id="metaIp6" placeholder="2a03:2880:...">
-            </div>
-        </div>
-        <button id="queryBtn" onclick="doQuery()">
+<div class="row">
+    <div>
+        <label for="type">记录类型</label>
+        <select id="type">
+            <option value="A">A (IPv4)</option>
+            <option value="AAAA">AAAA (IPv6)</option>
+            <option value="HTTPS">HTTPS (ECH)</option>
+        </select>
+    </div>
+    <div>
+        <label for="mode">优选模式</label>
+        <select id="mode" onchange="onModeChange()">
+            <option value="">无 (默认解析)</option>
+            <option value="cf">🔶 CF 优选</option>
+            <option value="meta">🔵 Meta 优选</option>
+        </select>
+    </div>
+</div>
+<div class="global-section">
+    <label for="best">全局跟随优选结果</label>
+    <select id="best" style="margin-bottom:0">
+        <option value="false">否 (仅固定域名)</option>
+        <option value="true">是 (所有 CF/Meta 域名)</option>
+    </select>
+</div>
+<div id="cfParams" class="advanced-section">
+    <div class="param-group active" id="cfGroup">
+        <label>Cloudflare IPv4 <span class="badge badge-cf">ip4</span></label>
+        <input type="text" id="ip4" placeholder="1.2.3.4, 5.6.7.8">
+        <label>Cloudflare IPv6 <span class="badge badge-cf">ip6</span></label>
+        <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
+        <label>CF优选域名 <span class="badge badge-cf">cf</span></label>
+        <input type="text" id="cfDomain" placeholder="example.com, example2.com">
+        <label>ECH来源 外层SNI <span class="badge badge-cf">ech</span></label>
+        <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
+    </div>
+</div>
+<div id="metaParams" class="advanced-section">
+    <div class="param-group active" id="metaGroup">
+        <label>Meta IPv4 <span class="badge badge-meta">metaIp4</span></label>
+        <input type="text" id="metaIp4" placeholder="157.240.1.1, 157.240.2.1">
+        <label>Meta IPv6 <span class="badge badge-meta">metaIp6</span></label>
+        <input type="text" id="metaIp6" placeholder="2a03:2880:...">
+        <label>Meta优选域名 <span class="badge badge-meta">meta</span></label>
+        <input type="text" id="metaDomain" placeholder="meta-better.example.com">
+    </div>
+</div>
+<div class="global-section">
+    <label for="clientIp">自定义 Client IP (ECS) <span style="font-weight:normal;font-size:0.8em;">留空自动获取</span></label>
+    <input type="text" id="clientIp" placeholder="1.2.4.0/24 或 ::/56" style="margin-bottom:0">
+</div>
+<button id="queryBtn" onclick="doQuery()">
             <span id="btnText">🔍 开始查询</span>
         </button>
         <div id="result" class="result-box" style="display: none;"></div>
-        <div class="footer">GitHub@rosenii ·DOH-ECH · Cloudflare Pages</div>
+        <div class="footer">GitHub@rosenii · DOH-ECH · Cloudflare Pages</div>
     </div>
     <script>
         function onModeChange() {
@@ -1061,62 +1065,69 @@ function getHtml() {
             document.getElementById('cfParams').classList.toggle('show', mode === 'cf');
             document.getElementById('metaParams').classList.toggle('show', mode === 'meta');
         }
-        async function doQuery() {
-            const domain = document.getElementById('domain').value.trim();
-            const type = document.getElementById('type').value;
-            const mode = document.getElementById('mode').value;
-            const btn = document.getElementById('queryBtn');
-            const btnText = document.getElementById('btnText');
-            const resultDiv = document.getElementById('result');
-            if (!domain) {
-                resultDiv.innerHTML = '<span class="error">请输入域名</span>';
-                resultDiv.className = 'result-box error';
-                resultDiv.style.display = 'block';
-                return;
-            }
-            const params = new URLSearchParams();
-            params.set('domain', domain);
-            params.set('type', type);
-            if (mode === 'cf') {
-                const ip4 = document.getElementById('ip4').value.trim();
-                const ip6 = document.getElementById('ip6').value.trim();
-                const cfDomain = document.getElementById('cfDomain').value.trim();
-                const echDomain = document.getElementById('echDomain').value.trim();
-                const best = document.getElementById('best').value;
-                if (ip4) params.set('ip4', ip4);
-                if (ip6) params.set('ip6', ip6);
-                if (cfDomain) params.set('cf', cfDomain);
-                if (echDomain) params.set('ech', echDomain);
-                params.set('best', best);
-            } else if (mode === 'meta') {
-                const metaIp4 = document.getElementById('metaIp4').value.trim();
-                const metaIp6 = document.getElementById('metaIp6').value.trim();
-                if (metaIp4) params.set('metaIp4', metaIp4);
-                if (metaIp6) params.set('metaIp6', metaIp6);
-            }
-            btn.disabled = true;
-            btnText.textContent = '⏳ 查询中...';
-            resultDiv.className = 'result-box loading';
-            resultDiv.textContent = '';
-            resultDiv.style.display = 'block';
-            try {
-                const res = await fetch('/api/query?' + params.toString());
-                const data = await res.json();
-                if (data.error) {
-                    resultDiv.textContent = '错误：' + data.error;
-                    resultDiv.className = 'result-box error';
-                } else {
-                    resultDiv.textContent = JSON.stringify(data, null, 2);
-                    resultDiv.className = 'result-box';
-                }
-            } catch (err) {
-                resultDiv.textContent = '网络错误：' + err.message;
-                resultDiv.className = 'result-box error';
-            } finally {
-                btn.disabled = false;
-                btnText.textContent = '🔍 开始查询';
-            }
+async function doQuery() {
+    const domain = document.getElementById('domain').value.trim();
+    const type = document.getElementById('type').value;
+    const mode = document.getElementById('mode').value;
+    const btn = document.getElementById('queryBtn');
+    const btnText = document.getElementById('btnText');
+    const resultDiv = document.getElementById('result');
+    if (!domain) {
+        resultDiv.innerHTML = '<span class="error">请输入域名</span>';
+        resultDiv.className = 'result-box error';
+        resultDiv.style.display = 'block';
+        return;
+    }
+    const params = new URLSearchParams();
+    params.set('domain', domain);
+    params.set('type', type);
+    // 全局 best
+    const best = document.getElementById('best').value;
+    params.set('best', best);
+
+    if (mode === 'cf') {
+        const ip4 = document.getElementById('ip4').value.trim();
+        const ip6 = document.getElementById('ip6').value.trim();
+        const cfDomain = document.getElementById('cfDomain').value.trim();
+        const echDomain = document.getElementById('echDomain').value.trim();
+        if (ip4) params.set('ip4', ip4);
+        if (ip6) params.set('ip6', ip6);
+        if (cfDomain) params.set('cf', cfDomain);
+        if (echDomain) params.set('ech', echDomain);
+    } else if (mode === 'meta') {
+        const metaIp4 = document.getElementById('metaIp4').value.trim();
+        const metaIp6 = document.getElementById('metaIp6').value.trim();
+        const metaDomain = document.getElementById('metaDomain').value.trim();
+        if (metaIp4) params.set('metaIp4', metaIp4);
+        if (metaIp6) params.set('metaIp6', metaIp6);
+        if (metaDomain) params.set('meta', metaDomain);
+    }
+    const clientIp = document.getElementById('clientIp').value.trim();
+    if (clientIp) params.set('clientIp', clientIp);
+
+    btn.disabled = true;
+    btnText.textContent = '⏳ 查询中...';
+    resultDiv.className = 'result-box loading';
+    resultDiv.textContent = '';
+    resultDiv.style.display = 'block';
+    try {
+        const res = await fetch('/api/query?' + params.toString());
+        const data = await res.json();
+        if (data.error) {
+            resultDiv.textContent = '错误：' + data.error;
+            resultDiv.className = 'result-box error';
+        } else {
+            resultDiv.textContent = JSON.stringify(data, null, 2);
+            resultDiv.className = 'result-box';
         }
+    } catch (err) {
+        resultDiv.textContent = '网络错误：' + err.message;
+        resultDiv.className = 'result-box error';
+    } finally {
+        btn.disabled = false;
+        btnText.textContent = '🔍 开始查询';
+    }
+}
     </script>
 </body>
 </html>`;
