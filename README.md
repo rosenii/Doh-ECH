@@ -1,6 +1,6 @@
 # DOH-ECH – Cloudflare Pages 实现 DoH with ECH 直连CF托管站点
 
-基于 Cloudflare Pages 的单文件 **DNS-over-HTTPS (DoH) 服务器**，智能为 Cloudflare / Meta 站点注入 ECH 配置，实现隐藏SNI，并支持自定义优选 IP、多域名解析与全球边缘缓存,实现通过优选ip后，直连CF托管网站如X等，Meta 部分ip也可直连。
+基于 Cloudflare Pages 的单文件 **DNS-over-HTTPS (DoH) 服务器**，智能为 Cloudflare / Meta 站点注入 ECH 配置，实现隐藏SNI，并支持自定义优选 IP、多域名解析与全球边缘缓存,实现通过优选ip后，直连CF托管网站/Meta 站点 如X，Facebook等 。
 
 ---
 
@@ -18,9 +18,9 @@
 
 ### 3. 使用方法
 - **网页查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
-- **DOH地址示例**：  
+- **DOH地址(完整参数示例)**：  
   ```
-   "https://your-domain.pages.dev/ech?best=true&cf=ip.sb&ip4=1.2.3.4,5.6.7.8&ip6=::&MetaIp4=5.6.7.8"
+   "https://your-domain.pages.dev/ech?best=true&clientip=1.2.4.8&cf=ip.sb&ip4=1.2.3.4,5.6.7.8&ip6=::&meta=fbcdn.net&MetaIp4=5.6.7.8&MetaIp6=::"
   ```
 - **配置 DoH 客户端**：  
   -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义 IP。
@@ -35,9 +35,9 @@
 - ✅ **ECH 自动注入**  
   - 对 **Cloudflare** 托管域名自动获取真实 ECH 配置。  
   - 对 **Meta**（Facebook 等）域名注入固定 ECH 配置。  
-  - 支持通过 `ech` 参数自定义 ECH 来源域名。
-- ✅ **静态域名优选**  
-  内置 Cloudflare / Meta 静态域名列表，直接返回预设的优选 IP（可自定义覆盖）。
+  - 支持通过 `ech` 参数自定义 ECH 获取配置的来源域名。
+- ✅ **固定域名优选**  
+  内置 Cloudflare / Meta 自定义固定域名列表，直接返回预设的优选 IP（可自定义覆盖）。
 - ✅ **自定义 IP 替换**  
   通过 `ip4`、`ip6`、`metaIp4`、`metaIp6` 参数强制替换解析结果，支持逗号分隔或 JSON 数组。
 - ✅ **cf 优选多域名解析**  
@@ -74,8 +74,10 @@
 | `metaIp4`     | Meta 域名的 IPv4 替换地址                                                                 | `157.240.1.1`                       |
 | `metaIp6`     | Meta 域名的 IPv6 替换地址                                                                 | `2a03:2880:...`                     |
 | `cf`          | 解析优选域名（支持逗号分隔多域名）以获取替换 IP，**仅对 Cloudflare 相关域名生效**        | `example.com,ip2.example.com`       |
+| `meta`          | 解析优选域名（支持逗号分隔多域名）以获取替换 IP，**仅对 Meta相关域名生效**        | `example.com,ip2.example.com`       |
 | `ech`         | 获取CF公共ECH配置的域名（默认 `cloudflare-ech.com`）                                      | `cloudflare-ech.com`               |
 | `best` | `X-Best` | 全局跟随优选（`true`/`false`） | `true` |
+| `clintip` | `X-ClientIp` | 全局跟随优选（`/24`/``） | `::/26` |
 
 > **注意**：`cf` 参数仅当目标域名为 Cloudflare 站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF 域名。
 
