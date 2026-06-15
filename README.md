@@ -6,17 +6,15 @@
 
 ## 部署步骤
 
-### 1. 准备 CIDR 列表/已列出
-编辑 `_worker.js`，找到 `RAW_META_CIDRS` 和 `RAW_CF_CIDRS` 数组，将您的完整 CIDR 列表填入（若不需要归属探测可保留空数组）。  
 **Cloudflare IPv4 官方列表**：[https://www.cloudflare.com/ips-v4](https://www.cloudflare.com/ips-v4)
 
-### 2. 部署到 Cloudflare Pages
+### 1. 部署到 Cloudflare Pages
 - 进入 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → **创建项目**。
 - 上传资产或连接 Git 仓库，上传 `_worker.js` 至项目根目录。
 - 无需设置构建命令或输出目录（Pages 会自动识别单文件 Worker）。
 - 部署完成后访问分配的域名即可。
 
-### 3. 使用方法
+### 2. 使用方法
 - **网页查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
 - **DOH地址(完整参数示例)**：  
   ```
@@ -24,33 +22,9 @@
   ```
 - **配置 DoH 客户端**：  
   -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义 IP。
-  
+、、、  
   -- 使用代理工具：将需要直连的CF站点的域名解析服务器doh设置为`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义 IP。
   
----
-## 特性
-
-- ✅ **DoH 服务**  
-  提供 `/ech`（注入 ECH）和 `/doh`（纯净转发）两个标准 DoH 端点，支持 GET/POST。
-- ✅ **ECH 自动注入**  
-  - 对 **Cloudflare** 托管域名自动获取真实 ECH 配置。  
-  - 对 **Meta**（Facebook 等）域名注入固定 ECH 配置。  
-  - 支持通过 `ech` 参数自定义 ECH 获取配置的来源域名。
-- ✅ **固定域名优选**  
-  内置 Cloudflare / Meta 自定义固定域名列表，直接返回预设的优选 IP（可自定义覆盖）。
-- ✅ **自定义 IP 替换**  
-  通过 `ip4`、`ip6`、`metaIp4`、`metaIp6` 参数强制替换解析结果，支持逗号分隔或 JSON 数组。
-- ✅ **cf 优选多域名解析**  
-  `cf` 参数支持逗号分隔的多个域名，并发解析并合并去重 IP，适用于多 CDN 负载均衡。
-- ✅ **双上游竞速**  
-  同时查询 Google DNS 和阿里云 DNS，取最快响应，提高解析速度。
-- ✅ **全球边缘缓存**  
-  利用 Cloudflare Cache API 缓存上游 DNS 结果（A/AAAA 300s，HTTPS 600s），大幅减少上游请求次数。
-- ✅ **CIDR 归属探测**  
-  自动识别未知域名的 Cloudflare / Meta 归属，并注入对应 ECH（需配置 CIDR 列表）。
-- ✅ **美观的前端查询页面**  
-  内嵌网页界面，支持手动输入域名、选择记录类型、高级参数设置，即时显示 JSON 结果。
-
 ---
 
 ## 路由说明
@@ -154,7 +128,30 @@ curl "https://your-domain.pages.dev/api/query?domain=fb.ech&type=HTTPS"
 - **隐私与安全**：上游查询使用 Google 和阿里云的公共 DNS JSON API，注意数据隐私（可自行替换为其他 DoH 服务）。
 
 ---
+## 特性
 
+- ✅ **DoH 服务**  
+  提供 `/ech`（注入 ECH）和 `/doh`（纯净转发）两个标准 DoH 端点，支持 GET/POST。
+- ✅ **ECH 自动注入**  
+  - 对 **Cloudflare** 托管域名自动获取真实 ECH 配置。  
+  - 对 **Meta**（Facebook 等）域名注入固定 ECH 配置。  
+  - 支持通过 `ech` 参数自定义 ECH 获取配置的来源域名。
+- ✅ **固定域名优选**  
+  内置 Cloudflare / Meta 自定义固定域名列表，直接返回预设的优选 IP（可自定义覆盖）。
+- ✅ **自定义 IP 替换**  
+  通过 `ip4`、`ip6`、`metaIp4`、`metaIp6` 参数强制替换解析结果，支持逗号分隔或 JSON 数组。
+- ✅ **cf 优选多域名解析**  
+  `cf` 参数支持逗号分隔的多个域名，并发解析并合并去重 IP，适用于多 CDN 负载均衡。
+- ✅ **双上游竞速**  
+  同时查询 Google DNS 和阿里云 DNS，取最快响应，提高解析速度。
+- ✅ **全球边缘缓存**  
+  利用 Cloudflare Cache API 缓存上游 DNS 结果（A/AAAA 300s，HTTPS 600s），大幅减少上游请求次数。
+- ✅ **CIDR 归属探测**  
+  自动识别未知域名的 Cloudflare / Meta 归属，并注入对应 ECH（需配置 CIDR 列表）。
+- ✅ **美观的前端查询页面**  
+  内嵌网页界面，支持手动输入域名、选择记录类型、高级参数设置，即时显示 JSON 结果。
+
+---
 ## 项目结构
 
 ```
