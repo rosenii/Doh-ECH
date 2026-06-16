@@ -44,12 +44,12 @@
 
 | 参数名        | 用途                                                                                     | 示例值                              |
 | ------------- | ---------------------------------------------------------------------------------------- | ----------------------------------- |
-| `ip4`         | Cloudflare / 所有域名的 IPv4 替换地址（逗号分隔多 IP）                                    | `1.2.3.4,5.6.7.8`                  |
-| `ip6`         | Cloudflare / 所有域名的 IPv6 替换地址                                                     | `::1,::2`                           |
-| `metaIp4`     | Meta 域名的 IPv4 替换地址                                                                 | `157.240.1.1`                       |
-| `metaIp6`     | Meta 域名的 IPv6 替换地址                                                                 | `2a03:2880:...`                     |
-| `cf`          | 解析优选域名（支持逗号分隔多域名）以获取替换 IP，**仅对CF相关域名生效**        | `example.com,ip2.example.com`       |
-| `meta`          | 解析优选域名（支持逗号分隔多域名）以获取替换 IP，**仅对Meta相关域名生效**        | `example.com,ip2.example.com`       |
+| `ip4`         | CF 优选IPv4 替换地址                                    | `1.2.3.4,5.6.7.8`                  |
+| `ip6`         | CF优选 IPv6 替换地址                                                     | `::1,::2`                           |
+| `metaIp4`     | Meta 优选IPv4 替换地址                                                                 | `157.240.1.1`                       |
+| `metaIp6`     | Meta 优选IPv6 替换地址                                                                 | `2a03:2880:...`                     |
+| `cf`          | 解析优选域名 **仅对CF相关域名生效**        | `example.com,ip2.example.com`       |
+| `meta`          | 解析优选域名 **仅对Meta相关域名生效**        | `example.com,ip2.example.com`       |
 | `ech`         | 获取CF公共ECH配置的域名（默认 `cloudflare-ech.com`）                                      | `cloudflare-ech.com`               |
 | `best` | 全局跟随优选 所有CF/META站点都使用优选IP 默认`false`|（`true`/`false`） | `false` |
 | `clientip` |  自定义ECS,就近解析最佳结果 |默认自动获取（`/24`/ `::/26` ） |`自动获取`|
