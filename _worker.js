@@ -372,7 +372,41 @@ async function applySubConfig(config) {
 
     const lines = content.split(/\r?\n/)
         .map(line => line.trim())
-        .filter(line => line && !line.startsWith('#'));
+        .filter(line => line && !line.startsWith('#'))
+        .map(line => {
+            // 去除行内注释
+            const commentIndex = line.indexOf('#');
+            if (commentIndex !== -1) line = line.substring(0, commentIndex).trim();
+            return line;
+        })
+        .map(line => {
+            // 去除端口号
+            if (type === 'ip') {
+                // 处理 [IPv6]:port
+                if (line.startsWith('[') && line.includes(']:')) {
+                    const bracketEnd = line.indexOf(']:');
+                    line = line.substring(1, bracketEnd);
+                } else if (line.includes(':')) {
+                    // 判断是否为 IPv4:port (简单正则)
+                    const ipv4Port = line.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
+                    if (ipv4Port) {
+                        line = ipv4Port[1];
+                    }
+                    // 否则可能是 IPv6 地址，保留原样
+                }
+            } else { // cf 类型，域名带端口
+                const portIndex = line.lastIndexOf(':');
+                if (portIndex !== -1) {
+                    const host = line.substring(0, portIndex);
+                    const port = line.substring(portIndex + 1);
+                    if (/^\d+$/.test(port)) {
+                        line = host;
+                    }
+                }
+            }
+            return line.trim();
+        })
+        .filter(line => line); // 最终过滤空行
 
     if (lines.length === 0) return;
 
