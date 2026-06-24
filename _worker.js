@@ -1155,8 +1155,8 @@ function getHtml() {
                 <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 <label>ECH Outer-SNI <span class="badge badge-cf">ech</span></label>
                 <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
-                <label>优选订阅 (ip-URL 或 cf-URL) <span class="badge badge-cf">sub</span></label>
-                <input type="text" id="sub" placeholder="ip-https://... 或 cf-https://... 逗号分隔">
+                <label>优选订阅(ip-URL|cf-URL) <span class="badge badge-cf">sub</span></label>
+                <input type="text" id="sub" placeholder="ip-https://...txt,cf-https://...txt 逗号分隔">
             </div>
         </div>
         <div id="metaParams" class="advanced-section">
