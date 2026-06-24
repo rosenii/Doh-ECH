@@ -390,12 +390,20 @@ function parseIpList(raw) {
     if (raw.startsWith('[') && raw.endsWith(']')) {
         try {
             const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) return arr.map(String).filter(s => s);
+            if (Array.isArray(arr)) return shuffle(arr.map(String).filter(s => s));
         } catch {}
     }
-    return raw.split(',').map(s => s.trim()).filter(s => s);
+    return shuffle(raw.split(',').map(s => s.trim()).filter(s => s));
 }
 
+// 新增洗牌辅助函数
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
 async function resolveMultiDomainToIps(domainsStr, type, clientIP) {
     const domains = domainsStr.split(',').map(s => s.trim()).filter(s => s);
     if (domains.length === 0) return [];
