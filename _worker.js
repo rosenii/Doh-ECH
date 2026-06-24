@@ -41,9 +41,10 @@ const RAW_CF_CIDRS = [
 ];
 
 const cacheMap = new Map();
+const subCache = new Map();
 const CACHE_TTL = 3600 * 1000;        // 归属缓存 1 小时
 const ECH_CACHE_TTL = 1800 * 1000;    // ECH 缓存 半小时
-
+const SUB_CACHE_TTL = 10800 * 1000; // 订阅缓存 3 小时
 let compiledMeta = null, compiledCF = null;
 function getCompiledMeta() { if (!compiledMeta) compiledMeta = compileCidrs(RAW_META_CIDRS); return compiledMeta; }
 function getCompiledCF()   { if (!compiledCF)   compiledCF   = compileCidrs(RAW_CF_CIDRS);   return compiledCF; }
@@ -350,70 +351,95 @@ async function applySubConfig(config) {
     const sub = config.sub;
     if (!sub) return;
 
-    const match = sub.match(/^(ip|cf)-(.+)$/);
-    if (!match) return;
+    // 支持逗号分隔的多个订阅
+    const entries = sub.split(',').map(s => s.trim()).filter(s => s);
 
-    const [, type, url] = match;
-    let content = '';
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timer);
-        if (res.ok) {
-            content = await res.text();
+    const allIps = new Set();
+    const allDomains = new Set();
+
+    for (const entry of entries) {
+        const match = entry.match(/^(ip|cf)-(.+)$/);
+        if (!match) continue;
+
+        const [, type, url] = match;
+        let content = null;
+
+        // 检查缓存
+        const cached = subCache.get(url);
+        if (cached && Date.now() < cached.expire) {
+            content = cached.content;
+        } else {
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 5000);
+                const res = await fetch(url, { signal: controller.signal });
+                clearTimeout(timer);
+                if (res.ok) {
+                    content = await res.text();
+                    // 更新缓存
+                    subCache.set(url, {
+                        content: content,
+                        expire: Date.now() + SUB_CACHE_TTL
+                    });
+                } else if (cached) {
+                    // 请求失败但有过期缓存，可继续使用
+                    content = cached.content;
+                }
+            } catch (e) {
+                console.error('sub fetch error:', e);
+                // 如果有过期缓存，仍可使用
+                if (cached) {
+                    content = cached.content;
+                }
+                continue; // 否则跳过此订阅
+            }
         }
-    } catch (e) {
-        console.error('sub fetch error:', e);
-        return;
+
+        if (!content) continue;
+
+        // 清理内容：去注释、去端口
+        const lines = content.split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('#'))
+            .map(line => {
+                const commentIndex = line.indexOf('#');
+                if (commentIndex !== -1) line = line.substring(0, commentIndex).trim();
+                return line;
+            })
+            .map(line => {
+                if (type === 'ip') {
+                    if (line.startsWith('[') && line.includes(']:')) {
+                        line = line.substring(1, line.indexOf(']:'));
+                    } else if (line.includes(':')) {
+                        const ipv4Port = line.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
+                        if (ipv4Port) line = ipv4Port[1];
+                    }
+                } else {
+                    const portIndex = line.lastIndexOf(':');
+                    if (portIndex !== -1) {
+                        const host = line.substring(0, portIndex);
+                        const port = line.substring(portIndex + 1);
+                        if (/^\d+$/.test(port)) line = host;
+                    }
+                }
+                return line.trim();
+            })
+            .filter(line => line);
+
+        for (const line of lines) {
+            if (type === 'ip') {
+                allIps.add(line);
+            } else {
+                allDomains.add(line);
+            }
+        }
     }
 
-    if (!content) return;
-
-    const lines = content.split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(line => line && !line.startsWith('#'))
-        .map(line => {
-            // 去除行内注释
-            const commentIndex = line.indexOf('#');
-            if (commentIndex !== -1) line = line.substring(0, commentIndex).trim();
-            return line;
-        })
-        .map(line => {
-            // 去除端口号
-            if (type === 'ip') {
-                // 处理 [IPv6]:port
-                if (line.startsWith('[') && line.includes(']:')) {
-                    const bracketEnd = line.indexOf(']:');
-                    line = line.substring(1, bracketEnd);
-                } else if (line.includes(':')) {
-                    // 判断是否为 IPv4:port (简单正则)
-                    const ipv4Port = line.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-                    if (ipv4Port) {
-                        line = ipv4Port[1];
-                    }
-                    // 否则可能是 IPv6 地址，保留原样
-                }
-            } else { // cf 类型，域名带端口
-                const portIndex = line.lastIndexOf(':');
-                if (portIndex !== -1) {
-                    const host = line.substring(0, portIndex);
-                    const port = line.substring(portIndex + 1);
-                    if (/^\d+$/.test(port)) {
-                        line = host;
-                    }
-                }
-            }
-            return line.trim();
-        })
-        .filter(line => line); // 最终过滤空行
-
-    if (lines.length === 0) return;
-
-    if (type === 'ip') {
-        config.ip4 = lines.join(',');
-    } else if (type === 'cf') {
-        config.cfDomain = lines.join(',');
+    if (allIps.size > 0) {
+        config.ip4 = Array.from(allIps).join(',');
+    }
+    if (allDomains.size > 0) {
+        config.cfDomain = Array.from(allDomains).join(',');
     }
 }
 
@@ -1127,10 +1153,10 @@ function getHtml() {
                 <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
                 <label>CF优选域名<span class="badge badge-cf">cf</span></label>
                 <input type="text" id="cfDomain" placeholder="example.com, example2.com">
-                <label>ECH outer-sni</label>
+                <label>ECH Outer-SNI <span class="badge badge-cf">ech</span></label>
                 <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
-                <label>优选订阅 (ip-URL 或 cf-URL)</label>
-                <input type="text" id="sub" placeholder="ip-https://... 或 cf-https://...">
+                <label>优选订阅 (ip-URL 或 cf-URL) <span class="badge badge-cf">sub</span></label>
+                <input type="text" id="sub" placeholder="ip-https://... 或 cf-https://... 逗号分隔">
             </div>
         </div>
         <div id="metaParams" class="advanced-section">
@@ -1139,7 +1165,7 @@ function getHtml() {
                 <input type="text" id="metaIp4" placeholder="157.240.1.1, 157.240.2.1">
                 <label>Meta IPv6 <span class="badge badge-meta">metaIp6</span></label>
                 <input type="text" id="metaIp6" placeholder="2a03:2880:...">
-                <label>解析域名获取 IP <span class="badge badge-meta">meta</span></label>
+                <label>优选域名 <span class="badge badge-meta">meta</span></label>
                 <input type="text" id="metaDomain" placeholder="meta-better.example.com">
             </div>
         </div>
