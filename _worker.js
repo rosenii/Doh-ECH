@@ -1,12 +1,12 @@
 /**
- * DOH-ECH 最终完整版
- * - best 参数控制是否开启全局跟随优选
+ * DOH-ECH 
+ * - best 参数控制非静态域名跟随优选
  * - 双上游竞速 + Edge 缓存
  * - CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
  * - HTTPS hints 复用归属探测 IP
  * - ECS 支持 + 自定义 clientIp
- * - 新增 sub 订阅（ip- 和 cf- 格式）支持从订阅源获取优选ip
- * - 多域名解析结果随机乱序返回
+ * - sub 多订阅缓存 + exclude 过滤
+ * - 返回记录随机乱序开关 (shuffle 参数)
  */
 
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -14,11 +14,9 @@ const UPSTREAM_DNS_ALI = 'https://dns.alidns.com/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
 const UPSTREAM_JSON_ALI = 'https://dns.alidns.com/resolve';
 
-const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
-
 const CF_STATIC_DOMAINS = [
     "twimg.com", "twitter.com", "x.com", "t.co",
-    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"
+    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com", "lss1.ccwu.cc"
 ];
 const DEFAULT_CF_IP = "104.18.10.118";
 const DEFAULT_CF_IP6 = "2606:4700::6812:a76";
@@ -29,9 +27,10 @@ const META_DOMAINS = [
 ];
 const DEFAULT_META_IP = "157.240.1.35";
 
+const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
+
 const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";
 
-//  CIDR 列表
 const RAW_META_CIDRS = [
 '31.13.24.0/21','31.13.64.0/18','45.64.40.0/22','57.141.0.0/24','57.141.2.0/23','57.141.4.0/22','57.141.8.0/21','57.141.16.0/23','57.144.0.0/14','66.220.144.0/20','69.63.176.0/20','69.171.224.0/19','74.119.76.0/22','102.132.96.0/20','102.132.112.0/24','102.132.114.0/23','102.132.116.0/23','102.132.119.0/24','102.132.120.0/23','102.132.123.0/24','102.132.125.0/24','102.132.126.0/23','102.221.188.0/22','103.4.96.0/22','129.134.0.0/17','129.134.130.0/24','129.134.135.0/24','129.134.136.0/22','129.134.140.0/24','129.134.143.0/24','129.134.144.0/24','129.134.147.0/24','129.134.148.0/23','129.134.154.0/23','129.134.156.0/22','129.134.160.0/22','129.134.164.0/23','129.134.168.0/21','129.134.176.0/20','129.134.194.0/24','157.240.0.0/17','157.240.128.0/23','157.240.131.0/24','157.240.132.0/24','157.240.134.0/24','157.240.136.0/23','157.240.139.0/24','157.240.156.0/23','157.240.159.0/24','157.240.169.0/24','157.240.175.0/24','157.240.177.0/24','157.240.179.0/24','157.240.181.0/24','157.240.182.0/23','157.240.184.0/21','157.240.192.0/18','163.70.128.0/17','163.77.132.0/23','163.77.136.0/23','163.114.128.0/20','173.252.64.0/18','179.60.192.0/22','185.60.216.0/22','185.89.216.0/22','199.201.64.0/22','204.15.20.0/22','2620:0:1c00::/40','2620:10d:c090::/44','2a03:2880::/32','2a03:2887:ff00::/48','2a03:2887:ff02::/48','2a03:2887:ff04::/46','2a03:2887:ff09::/48','2a03:2887:ff0a::/48','2a03:2887:ff1b::/48','2a03:2887:ff1c::/48','2a03:2887:ff1e::/48','2a03:2887:ff20::/48','2a03:2887:ff22::/47','2a03:2887:ff27::/48','2a03:2887:ff28::/46','2a03:2887:ff2f::/48','2a03:2887:ff30::/48','2a03:2887:ff33::/48','2a03:2887:ff37::/48','2a03:2887:ff38::/46','2a03:2887:ff3f::/48','2a03:2887:ff40::/46','2a03:2887:ff44::/47','2a03:2887:ff48::/46','2a03:2887:ff4d::/48','2a03:2887:ff4e::/47','2a03:2887:ff50::/45','2a03:2887:ff58::/47','2a03:2887:ff5a::/48','2a03:2887:ff5f::/48','2a03:2887:ff60::/48','2a03:2887:ff62::/47','2a03:2887:ff64::/46','2a03:2887:ff68::/47','2a03:2887:ff6a::/48','2a03:2887:ff70::/47','2c0f:ef78:3::/48','2c0f:ef78:5::/48','2c0f:ef78:9::/48','2c0f:ef78:c::/47','2c0f:ef78:e::/48','2c0f:ef78:10::/47'
 ];
@@ -41,10 +40,11 @@ const RAW_CF_CIDRS = [
 ];
 
 const cacheMap = new Map();
-const subCache = new Map();
 const CACHE_TTL = 3600 * 1000;        // 归属缓存 1 小时
-const ECH_CACHE_TTL = 1800 * 1000;    // ECH 缓存 半小时
-const SUB_CACHE_TTL = 10800 * 1000; // 订阅缓存 3 小时
+const ECH_CACHE_TTL = 3600 * 1000;    // ECH 缓存 1 小时
+const SUB_CACHE_TTL = 10800 * 1000;   // 订阅缓存 3 小时
+const subCache = new Map();
+
 let compiledMeta = null, compiledCF = null;
 function getCompiledMeta() { if (!compiledMeta) compiledMeta = compileCidrs(RAW_META_CIDRS); return compiledMeta; }
 function getCompiledCF()   { if (!compiledCF)   compiledCF   = compileCidrs(RAW_CF_CIDRS);   return compiledCF; }
@@ -75,10 +75,11 @@ async function handleDoHRequest(req, injectEch, ctx, clientIP) {
         metaDomain: url.searchParams.get('meta')    || req.headers.get('X-Meta')    || '',
         echDomain:  url.searchParams.get('ech')     || req.headers.get('X-ECH')     || 'cloudflare-ech.com',
         best:       url.searchParams.get('best')    || req.headers.get('X-Best')    || 'false',
-        sub:        url.searchParams.get('sub')     || req.headers.get('X-Sub')     || ''
+        sub:        url.searchParams.get('sub')     || req.headers.get('X-Sub')     || '',
+        exclude:    url.searchParams.get('exclude') || req.headers.get('X-Exclude') || '',
+        shuffle:    url.searchParams.get('shuffle') || req.headers.get('X-Shuffle') || 'true'
     };
 
-    // 应用订阅
     await applySubConfig(config);
 
     if (req.method === 'POST') {
@@ -170,7 +171,9 @@ async function handleApiQuery(url, clientIP) {
         metaDomain: url.searchParams.get('meta')    || '',
         echDomain:  url.searchParams.get('ech')     || 'cloudflare-ech.com',
         best:       url.searchParams.get('best')    || 'false',
-        sub:        url.searchParams.get('sub')     || ''
+        sub:        url.searchParams.get('sub')     || '',
+        exclude:    url.searchParams.get('exclude') || '',
+        shuffle:    url.searchParams.get('shuffle') || 'true'
     };
 
     await applySubConfig(config);
@@ -256,6 +259,8 @@ async function resolveDNS(domain, type, config, clientIP) {
 
 // ========== 统一静态域名处理 ==========
 async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) {
+    const doShuffle = config.shuffle !== 'false';
+
     if (type === 'AAAA') {
         if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
         const ips = await applyIPPreference(
@@ -263,14 +268,15 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
             isCF ? config.ip6 : config.metaIp6,
             isCF ? config.cfDomain : config.metaDomain,
             isCF ? DEFAULT_CF_IP6 : '',
-            clientIP
+            clientIP,
+            doShuffle
         );
         return { domain, type, answers: ips, ech: null };
     }
 
     if (type === 'HTTPS') {
-        const ipv4Hints = await collectHints(1, config, isCF, clientIP);
-        const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, isCF, clientIP) : [];
+        const ipv4Hints = await collectHints(1, config, isCF, clientIP, doShuffle);
+        const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, isCF, clientIP, doShuffle) : [];
         const ech = isCF ? await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP) : META_ECH_CONFIG;
         const result = { domain, type, answers: [] };
         result.ech = ech || null;
@@ -285,50 +291,52 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
         isCF ? config.ip4 : config.metaIp4,
         isCF ? config.cfDomain : config.metaDomain,
         isCF ? DEFAULT_CF_IP : DEFAULT_META_IP,
-        clientIP
+        clientIP,
+        doShuffle
     );
     return { domain, type, answers: ips, ech: null };
 }
 
 // 公共 IP 优选：自定义 IP > 多域名解析 > 默认 IP
-async function applyIPPreference(type, customIP, resolveDomain, defaultIP, clientIP) {
-    if (customIP) return parseIpList(customIP);
+async function applyIPPreference(type, customIP, resolveDomain, defaultIP, clientIP, doShuffle = true) {
+    if (customIP) return parseIpList(customIP, doShuffle);
     if (resolveDomain) {
-        const resolved = await resolveMultiDomainToIps(resolveDomain, type === 'AAAA' ? 28 : 1, clientIP);
+        const resolved = await resolveMultiDomainToIps(resolveDomain, type === 'AAAA' ? 28 : 1, clientIP, doShuffle);
         if (resolved.length > 0) {
             return resolved.map(ip => type === 'AAAA' ? formatIPv6FromBytes(ip) : bytesToIp(ip));
         }
     }
-    return defaultIP ? parseIpList(defaultIP) : [];
+    return defaultIP ? parseIpList(defaultIP, doShuffle) : [];
 }
 
 // 收集 HTTPS hints
-async function collectHints(type, config, isCF, clientIP) {
+async function collectHints(type, config, isCF, clientIP, doShuffle = true) {
     if (type === 1) {
-        if (isCF && config.ip4) return parseIpList(config.ip4);
-        if (!isCF && config.metaIp4) return parseIpList(config.metaIp4);
+        if (isCF && config.ip4) return parseIpList(config.ip4, doShuffle);
+        if (!isCF && config.metaIp4) return parseIpList(config.metaIp4, doShuffle);
         const resolveParam = isCF ? config.cfDomain : config.metaDomain;
         if (resolveParam) {
-            const resolved = await resolveMultiDomainToIps(resolveParam, 1, clientIP);
+            const resolved = await resolveMultiDomainToIps(resolveParam, 1, clientIP, doShuffle);
             if (resolved.length > 0) return resolved.map(bytesToIp);
         }
         return isCF ? [DEFAULT_CF_IP] : [DEFAULT_META_IP];
     } else { // IPv6
-        if (isCF && config.ip6) return parseIpList(config.ip6);
-        if (!isCF && config.metaIp6) return parseIpList(config.metaIp6);
+        if (isCF && config.ip6) return parseIpList(config.ip6, doShuffle);
+        if (!isCF && config.metaIp6) return parseIpList(config.metaIp6, doShuffle);
         const resolveParam = isCF ? config.cfDomain : config.metaDomain;
         if (resolveParam) {
-            const resolved = await resolveMultiDomainToIps(resolveParam, 28, clientIP);
+            const resolved = await resolveMultiDomainToIps(resolveParam, 28, clientIP, doShuffle);
             if (resolved.length > 0) return resolved.map(formatIPv6FromBytes);
         }
-        return isCF ? parseIpList(DEFAULT_CF_IP6) : [];
+        return isCF ? parseIpList(DEFAULT_CF_IP6, doShuffle) : [];
     }
 }
 
 // ===================== 假名 ECH 打包 =====================
 async function buildCFEchResponse(config, domain, clientIP) {
-    const ipv4Hints = await collectHints(1, config, true, clientIP);
-    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, true, clientIP) : [];
+    const doShuffle = config.shuffle !== 'false';
+    const ipv4Hints = await collectHints(1, config, true, clientIP, doShuffle);
+    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, true, clientIP, doShuffle) : [];
     const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
     if (!ech) return null;
     return packHttpsParamsWithHints(1, ".", [
@@ -338,22 +346,27 @@ async function buildCFEchResponse(config, domain, clientIP) {
 }
 
 async function buildMetaEchResponse(config, domain, clientIP) {
-    const ipv4Hints = await collectHints(1, config, false, clientIP);
-    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, false, clientIP) : [];
+    const doShuffle = config.shuffle !== 'false';
+    const ipv4Hints = await collectHints(1, config, false, clientIP, doShuffle);
+    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, false, clientIP, doShuffle) : [];
     return packHttpsParamsWithHints(1, ".", [
         { key: 'alpn', val: 'h2,h3' },
         { key: 'ech', val: META_ECH_CONFIG }
     ], ipv4Hints, ipv6Hints);
 }
 
-// +++ ==================== 新增：sub 订阅处理 ====================
+// ==================== sub 订阅处理（多订阅、缓存、排除、端口清理） ====================
 async function applySubConfig(config) {
     const sub = config.sub;
     if (!sub) return;
 
-    // 支持逗号分隔的多个订阅
-    const entries = sub.split(',').map(s => s.trim()).filter(s => s);
+    const excludeItems = new Set(
+        (config.exclude || '').split(',')
+            .map(s => s.trim())
+            .filter(s => s)
+    );
 
+    const entries = sub.split(',').map(s => s.trim()).filter(s => s);
     const allIps = new Set();
     const allDomains = new Set();
 
@@ -364,7 +377,6 @@ async function applySubConfig(config) {
         const [, type, url] = match;
         let content = null;
 
-        // 检查缓存
         const cached = subCache.get(url);
         if (cached && Date.now() < cached.expire) {
             content = cached.content;
@@ -376,28 +388,22 @@ async function applySubConfig(config) {
                 clearTimeout(timer);
                 if (res.ok) {
                     content = await res.text();
-                    // 更新缓存
                     subCache.set(url, {
                         content: content,
                         expire: Date.now() + SUB_CACHE_TTL
                     });
                 } else if (cached) {
-                    // 请求失败但有过期缓存，可继续使用
                     content = cached.content;
                 }
             } catch (e) {
                 console.error('sub fetch error:', e);
-                // 如果有过期缓存，仍可使用
-                if (cached) {
-                    content = cached.content;
-                }
-                continue; // 否则跳过此订阅
+                if (cached) content = cached.content;
+                else continue;
             }
         }
 
         if (!content) continue;
 
-        // 清理内容：去注释、去端口
         const lines = content.split(/\r?\n/)
             .map(line => line.trim())
             .filter(line => line && !line.startsWith('#'))
@@ -424,7 +430,7 @@ async function applySubConfig(config) {
                 }
                 return line.trim();
             })
-            .filter(line => line);
+            .filter(line => line && !excludeItems.has(line));
 
         for (const line of lines) {
             if (type === 'ip') {
@@ -444,19 +450,25 @@ async function applySubConfig(config) {
 }
 
 // ===================== 工具函数 =====================
-function parseIpList(raw) {
+function parseIpList(raw, doShuffle = true) {
     if (!raw) return [];
     raw = raw.trim();
+    let arr;
     if (raw.startsWith('[') && raw.endsWith(']')) {
         try {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) return shuffle(arr.map(String).filter(s => s));
-        } catch {}
+            arr = JSON.parse(raw).map(String).filter(s => s);
+        } catch {
+            arr = raw.split(',').map(s => s.trim()).filter(s => s);
+        }
+    } else {
+        arr = raw.split(',').map(s => s.trim()).filter(s => s);
     }
-    return shuffle(raw.split(',').map(s => s.trim()).filter(s => s));
+    if (doShuffle) {
+        return shuffle(arr);
+    }
+    return arr;
 }
 
-// 新增洗牌辅助函数
 function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -464,7 +476,8 @@ function shuffle(arr) {
     }
     return arr;
 }
-async function resolveMultiDomainToIps(domainsStr, type, clientIP) {
+
+async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = true) {
     const domains = domainsStr.split(',').map(s => s.trim()).filter(s => s);
     if (domains.length === 0) return [];
 
@@ -479,10 +492,11 @@ async function resolveMultiDomainToIps(domainsStr, type, clientIP) {
     }
 
     const ipArray = Array.from(allIps);
-    // Fisher-Yates 洗牌，随机乱序
-    for (let i = ipArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [ipArray[i], ipArray[j]] = [ipArray[j], ipArray[i]];
+    if (doShuffle) {
+        for (let i = ipArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [ipArray[i], ipArray[j]] = [ipArray[j], ipArray[i]];
+        }
     }
 
     if (type === 1) return ipArray.map(ipToBytes);
@@ -497,6 +511,7 @@ async function resolveDomainToIp(domain, type = 1, clientIP) {
     return [];
 }
 
+// ========== 上游查询（带 ECS、缓存） ==========
 async function queryUpstreamDNS(name, type, clientIP = '') {
     const params = new URLSearchParams({ name, type: String(type) });
     let ecsCacheSuffix = '';
@@ -598,7 +613,7 @@ function isDomainIpv4Only(domain) {
     return IPV4_ONLY_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 }
 
-// 二进制 DNS 工具
+// 二进制 DNS 工具（保持不变）
 async function forwardQuery(body) {
     const reqInit = {
         method: 'POST',
@@ -907,6 +922,7 @@ async function activeProbeOwner(domain, ctx, clientIP) {
     cacheMap.set(cacheKey, { value: null, expire: Date.now() + 60000 });
     return null;
 }
+
 // ===================== 前端页面 =====================
 function getHtml() {
     return `<!DOCTYPE html>
@@ -917,97 +933,124 @@ function getHtml() {
     <title>DOH-ECH 查询</title>
     <style>
         :root {
-            --bg: #0a0e17;
-            --card: #111827;
-            --text: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --accent: #38bdf8;
-            --accent-glow: rgba(56, 189, 248, 0.15);
-            --border: #1e293b;
-            --input-bg: #0f172a;
-            --cf: #f6821f;
-            --meta: #0668e1;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-hover: rgba(255, 255, 255, 0.15);
+            --highlight: rgba(255, 255, 255, 0.2);
+            --text: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --accent: #0A84FF; /* iOS 蓝 */
+            --accent-glow: rgba(10, 132, 255, 0.3);
+            --cf: #FF9F0A;
+            --meta: #0A84FF;
+            --bg: #000000;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: -apple-system, 'Inter', system-ui, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             padding: 20px;
-            background-image: radial-gradient(ellipse at top, rgba(56, 189, 248, 0.08) 0%, transparent 60%);
+            background-image: radial-gradient(ellipse at top, rgba(10, 132, 255, 0.3) 0%, transparent 60%),
+                              radial-gradient(ellipse at bottom, rgba(255, 159, 10, 0.1) 0%, transparent 60%);
         }
         .container {
-            background: var(--card);
-            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
+            border-radius: 32px;
             padding: 2.5rem;
             width: 100%;
-            max-width: 580px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+            max-width: 560px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        /* 高光效果 */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15) 0%, transparent 50%);
+            pointer-events: none;
         }
         .header {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 0.75rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
         }
         .logo {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--accent), #818cf8);
-            border-radius: 12px;
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--accent), #5E5CE6);
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.3rem;
+            font-size: 1.4rem;
+            box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
         }
         h1 { 
             font-size: 1.5rem; 
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--accent), #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-weight: 600;
+            letter-spacing: -0.02em;
         }
         .subtitle { 
             color: var(--text-secondary); 
-            font-size: 0.75rem; 
+            font-size: 0.8rem; 
             margin-bottom: 2rem;
-            margin-left: 52px;
+            margin-left: 56px;
+            position: relative;
+            z-index: 1;
         }
         label { 
-            font-size: 0.85rem; 
+            font-size: 0.8rem; 
             font-weight: 500;
             display: block; 
             margin-bottom: 0.5rem;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            position: relative;
+            z-index: 1;
         }
         input, select {
             width: 100%;
             padding: 0.8rem 1rem;
             margin-bottom: 1.2rem;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
             color: var(--text);
             font-size: 0.75rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: all 0.2s;
             font-family: inherit;
+            outline: none;
+            position: relative;
+            z-index: 1;
         }
         input:focus, select:focus {
-            outline: none;
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+            background: rgba(255, 255, 255, 0.12);
         }
         select {
             cursor: pointer;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 1rem center;
             padding-right: 2.5rem;
@@ -1016,23 +1059,31 @@ function getHtml() {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
+            position: relative;
+            z-index: 1;
         }
         button {
             width: 100%;
             padding: 0.9rem 1rem;
-            background: linear-gradient(135deg, var(--accent), #6366f1);
+            background: var(--accent);
             color: #fff;
             font-weight: 600;
             font-size: 1rem;
             border: none;
-            border-radius: 12px;
+            border-radius: 14px;
             cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+            transition: all 0.2s;
             margin-top: 0.5rem;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4);
+            position: relative;
+            z-index: 1;
         }
         button:hover { 
-            transform: translateY(-1px); 
-            box-shadow: 0 8px 25px rgba(56, 189, 248, 0.3);
+            background: #2a93ff;
+            box-shadow: 0 6px 24px rgba(10, 132, 255, 0.6);
+            transform: translateY(-1px);
         }
         button:active { transform: translateY(0); }
         button:disabled { 
@@ -1042,18 +1093,22 @@ function getHtml() {
             box-shadow: none;
         }
         .result-box {
-            background: var(--input-bg);
-            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 14px;
             padding: 1.2rem;
             margin-top: 1.2rem;
             word-break: break-all;
             font-family: 'JetBrains Mono', 'Fira Code', monospace;
             font-size: 0.85rem;
             min-height: 60px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             white-space: pre-wrap;
             max-height: 400px;
             overflow-y: auto;
+            position: relative;
+            z-index: 1;
         }
         .result-box.loading { 
             color: var(--accent); 
@@ -1066,30 +1121,35 @@ function getHtml() {
             content: '';
             width: 18px;
             height: 18px;
-            border: 2px solid var(--accent);
-            border-top-color: transparent;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: var(--accent);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .result-box.error { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+        .result-box.error { color: #FF453A; border-color: rgba(255,69,58,0.3); }
         .badge {
             display: inline-block;
             padding: 0.2rem 0.6rem;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 0.75rem;
             font-weight: 600;
             margin-right: 8px;
+            background: rgba(255,255,255,0.1);
         }
-        .badge-cf { background: rgba(246, 130, 31, 0.15); color: var(--cf); }
-        .badge-meta { background: rgba(6, 104, 225, 0.15); color: var(--meta); }
+        .badge-cf { color: var(--cf); }
+        .badge-meta { color: var(--meta); }
         .advanced-section {
             margin: 1.5rem 0;
             padding: 1.2rem;
-            background: var(--input-bg);
-            border-radius: 12px;
-            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             display: none;
+            position: relative;
+            z-index: 1;
         }
         .advanced-section.show { display: block; }
         .advanced-section .param-group { display: none; }
@@ -1101,13 +1161,33 @@ function getHtml() {
             margin-top: 1.5rem;
             color: var(--text-secondary);
             font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            position: relative;
+            z-index: 1;
+        }
+        .footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .footer a:hover {
+            color: var(--accent);
         }
         .global-section {
             margin: 1rem 0;
             padding: 1rem;
-            background: var(--input-bg);
-            border-radius: 12px;
-            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 1;
         }
     </style>
 </head>
@@ -1133,7 +1213,7 @@ function getHtml() {
                 <label for="mode">优选模式</label>
                 <select id="mode" onchange="onModeChange()">
                     <option value="">无 (默认解析)</option>
-                    <option value="cf">🔶 CF 优选</option>
+                    <option value="cf">🔶 Cloudflare 优选</option>
                     <option value="meta">🔵 Meta 优选</option>
                 </select>
             </div>
@@ -1151,12 +1231,18 @@ function getHtml() {
                 <input type="text" id="ip4" placeholder="1.2.3.4, 5.6.7.8">
                 <label>Cloudflare IPv6 <span class="badge badge-cf">ip6</span></label>
                 <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
-                <label>CF优选域名<span class="badge badge-cf">cf</span></label>
+                <label>CF 优选域名 <span class="badge badge-cf">cf</span></label>
                 <input type="text" id="cfDomain" placeholder="example.com, example2.com">
-                <label>ECH Outer-SNI <span class="badge badge-cf">ech</span></label>
+                <label>ECH Outer-SNI  <span class="badge badge-cf">ech</span></label>
                 <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
-                <label>优选订阅(ip-URL|cf-URL) <span class="badge badge-cf">sub</span></label>
-                <input type="text" id="sub" placeholder="ip-https://...txt,cf-https://...txt 逗号分隔">
+                <label>优选订阅 (ip-URL 或 cf-URL，多个用逗号分隔)  <span class="badge badge-cf">sub</span></label>
+                <input type="text" id="sub" placeholder="ip-https://... 或 cf-https://... , ...">
+                <label>排除项 (逗号分隔)  <span class="badge badge-cf">exclude</span></label>
+                <input type="text" id="exclude" placeholder="1.2.3.4,bad.example.com">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;">
+                    <label for="shuffle" style="margin-bottom:0;">随机乱序 IP  <span class="badge badge-cf">shuffle</span></label>
+                    <input type="checkbox" id="shuffle" checked style="width:auto;margin-bottom:0;">
+                </div>
             </div>
         </div>
         <div id="metaParams" class="advanced-section">
@@ -1165,7 +1251,7 @@ function getHtml() {
                 <input type="text" id="metaIp4" placeholder="157.240.1.1, 157.240.2.1">
                 <label>Meta IPv6 <span class="badge badge-meta">metaIp6</span></label>
                 <input type="text" id="metaIp6" placeholder="2a03:2880:...">
-                <label>优选域名 <span class="badge badge-meta">meta</span></label>
+                <label>Meta 优选域名 <span class="badge badge-meta">meta</span></label>
                 <input type="text" id="metaDomain" placeholder="meta-better.example.com">
             </div>
         </div>
@@ -1177,9 +1263,9 @@ function getHtml() {
             <span id="btnText">🔍 开始查询</span>
         </button>
         <div id="result" class="result-box" style="display: none;"></div>
-   <div class="footer">
+        <div class="footer">
             <span>DOH-ECH · Cloudflare Pages · </span>
-            <a href="https://github.com/rosenii/Doh-ECH" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/rosenii" target="_blank" rel="noopener noreferrer">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                     <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                 </svg>
@@ -1218,11 +1304,16 @@ function getHtml() {
                 const cfDomain = document.getElementById('cfDomain').value.trim();
                 const echDomain = document.getElementById('echDomain').value.trim();
                 const sub = document.getElementById('sub').value.trim();
+                const exclude = document.getElementById('exclude').value.trim();
+                const shuffleCheckbox = document.getElementById('shuffle');
+                const shuffle = shuffleCheckbox.checked ? 'true' : 'false';
                 if (ip4) params.set('ip4', ip4);
                 if (ip6) params.set('ip6', ip6);
                 if (cfDomain) params.set('cf', cfDomain);
                 if (echDomain) params.set('ech', echDomain);
                 if (sub) params.set('sub', sub);
+                if (exclude) params.set('exclude', exclude);
+                params.set('shuffle', shuffle);
             } else if (mode === 'meta') {
                 const metaIp4 = document.getElementById('metaIp4').value.trim();
                 const metaIp6 = document.getElementById('metaIp6').value.trim();
