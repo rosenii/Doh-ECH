@@ -1084,9 +1084,9 @@ function getHtml() {
             display: inline-block;
             padding: 0.15rem 0.5rem;
             border-radius: 8px;
-            font-size: 0.7rem;
+            font-size: 0.5rem;
             font-weight: 600;
-            margin-left: 6px;
+            margin-left: 3px;
             background: rgba(255,255,255,0.15);
             vertical-align: middle;
         }
@@ -1289,7 +1289,7 @@ function getHtml() {
                 <label class="checkbox-container" style="margin-bottom:0;">
                     <input type="checkbox" id="best" onchange="updateBestLabel()">
                     <span class="checkmark"></span>
-                    <span id="bestLabel">非静态域名跟随优选</span>
+                    <span id="bestLabel">全局跟随优选</span>
                 </label>
             </div>
         </div>
@@ -1378,7 +1378,7 @@ function getHtml() {
 
         function updateBestLabel() {
             const checked = document.getElementById('best').checked;
-            document.getElementById('bestLabel').textContent = checked ? '非静态域名跟随优选' : '非静态域名跟随优选（关闭）';
+            document.getElementById('bestLabel').textContent = checked ? '全局跟随优选' : '全局跟随优选(关)';
         }
 
         async function doQuery() {
