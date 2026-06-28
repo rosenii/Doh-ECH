@@ -1250,6 +1250,43 @@ function getHtml() {
             position: relative;
             z-index: 1;
         }
+        .request-url-box {
+            margin-top: 1rem;
+            padding: 0.8rem 1rem;
+            background: rgba(10, 132, 255, 0.1);
+            border: 1px solid rgba(10, 132, 255, 0.3);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            word-break: break-all;
+            position: relative;
+            z-index: 1;
+        }
+        .request-url-box code {
+            background: transparent;
+            color: var(--accent);
+            flex: 1;
+            min-width: 0;
+        }
+        .copy-btn {
+            padding: 0.4rem 1rem;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: none;
+            margin: 0;
+            width: auto;
+        }
+        .copy-btn:active {
+            background: #2a93ff;
+        }
     </style>
 </head>
 <body>
@@ -1359,6 +1396,13 @@ function getHtml() {
         <button id="queryBtn" onclick="doQuery()">
             <span id="btnText">🔍 开始查询</span>
         </button>
+  <div id="requestUrlContainer" style="display:none;">
+            <div class="request-url-box">
+                <span>当前查询 DoH 地址：</span>
+                <code id="requestUrlText"></code>
+                <button class="copy-btn" id="copyBtn" onclick="copyUrl()">复制</button>
+            </div>
+        </div>        
         <div id="result" class="result-box" style="display: none;"></div>
         <div class="footer">
             <span>DOH-ECH · Cloudflare Pages · </span>
@@ -1381,7 +1425,26 @@ function getHtml() {
             const checked = document.getElementById('best').checked;
             document.getElementById('bestLabel').textContent = checked ? '全局跟随优选' : '全局跟随优选(关)';
         }
-
+async function copyUrl() {
+            const url = document.getElementById('requestUrlText').textContent;
+            try {
+                await navigator.clipboard.writeText(url);
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = '已复制';
+                setTimeout(() => { btn.textContent = '复制'; }, 1500);
+            } catch (err) {
+                // Fallback for older browsers or non-HTTPS
+                const textArea = document.createElement('textarea');
+                textArea.value = url;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = '已复制';
+                setTimeout(() => { btn.textContent = '复制'; }, 1500);
+            }
+        }
         async function doQuery() {
             const domain = document.getElementById('domain').value.trim();
             const type = document.getElementById('type').value;
@@ -1428,6 +1491,11 @@ function getHtml() {
             const clientIp = document.getElementById('clientIp').value.trim();
             if (clientIp) params.set('clientIp', clientIp);
 
+            // 显示请求的 URL
+            const baseUrl = window.location.origin + '/ech';
+            const fullUrl = baseUrl + '?' + params.toString();
+            requestUrlText.textContent = fullUrl;
+            requestUrlContainer.style.display = 'block';
             btn.disabled = true;
             btnText.textContent = '⏳ 查询中...';
             resultDiv.className = 'result-box loading';
@@ -1458,6 +1526,7 @@ function getHtml() {
 </body>
 </html>`;
 }
+
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
