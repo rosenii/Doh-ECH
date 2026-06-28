@@ -54,6 +54,9 @@
 | `ech`         | 获取CF公共ECH配置的域名（默认 `cloudflare-ech.com`）                                      | `cloudflare-ech.com`               |
 | `best` | 全局跟随优选 所有CF/META站点都使用优选IP 默认`false`|（`true`/`false`） | `false` |
 | `clientip` |  自定义ECS,就近解析最佳结果 |默认自动获取（`/24`/ `::/26` ） |`自动获取`|
+| `sub` | CF优选订阅链接 |格式（`ip-https://ip.txt`/ `cf-https://domain.txt` ） |``|
+| `exclude` | 返回记录排除指定ip/domain |默认自动获取（`1.1.1.1`/ `cf.cf` ） |``|
+| `clientip` |  乱序返回记录 |默认`false`（`false`/ `true` ） |`false`|
 
 > **注意**：`cf`,`meta` 参数仅当目标域名为 CF/META站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF/META 域名。
 
