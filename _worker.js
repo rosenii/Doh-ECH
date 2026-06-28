@@ -1,6 +1,6 @@
 /**
  * DOH-ECH 
- * - best 参数控制非静态域名跟随优选
+ * - best 参数控制全局跟随优选
  * - 双上游竞速 + Edge 缓存
  * - CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
  * - HTTPS hints 复用归属探测 IP
@@ -1074,7 +1074,6 @@ function getHtml() {
             position: relative;
             z-index: 1;
         }
-        /* 移动端依然双列（仅在非常窄时切换） */
         @media (max-width: 400px) {
             .param-grid {
                 grid-template-columns: 1fr;
@@ -1086,8 +1085,8 @@ function getHtml() {
             border-radius: 8px;
             font-size: 0.5rem;
             font-weight: 600;
-            margin-left: 3px;
-            margin-bottom: 2px;
+            margin-left: 6px;
+            margin-bottom: 2.5px;
             background: rgba(255,255,255,0.15);
             vertical-align: middle;
         }
@@ -1100,7 +1099,6 @@ function getHtml() {
             position: relative;
             z-index: 1;
         }
-        /* 高光圆形勾选框（绝对居中白点） */
         .checkbox-container {
             display: inline-flex;
             align-items: center;
@@ -1258,18 +1256,24 @@ function getHtml() {
             border-radius: 12px;
             display: flex;
             align-items: center;
-            flex-wrap: wrap;
             gap: 0.5rem;
             font-size: 0.85rem;
-            word-break: break-all;
             position: relative;
             z-index: 1;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .request-url-box span {
+            flex-shrink: 0;
         }
         .request-url-box code {
             background: transparent;
             color: var(--accent);
             flex: 1;
-            min-width: 0;
+            overflow-x: auto;
+            white-space: nowrap;
+            display: inline-block;
+            padding-right: 0.5rem;
         }
         .copy-btn {
             padding: 0.4rem 1rem;
@@ -1283,6 +1287,7 @@ function getHtml() {
             box-shadow: none;
             margin: 0;
             width: auto;
+            flex-shrink: 0;
         }
         .copy-btn:active {
             background: #2a93ff;
@@ -1297,7 +1302,6 @@ function getHtml() {
         </div>
         <p class="subtitle">智能 DNS 解析 · ECH 注入 · ECS 就近解析</p>
         
-        <!-- 域名和记录类型一行 -->
         <div class="row">
             <div>
                 <label for="domain">查询域名</label>
@@ -1313,7 +1317,6 @@ function getHtml() {
             </div>
         </div>
 
-        <!-- 优选模式和跟随优选一行 -->
         <div class="row" style="align-items: flex-end;">
             <div>
                 <label for="mode">优选模式</label>
@@ -1332,7 +1335,6 @@ function getHtml() {
             </div>
         </div>
 
-        <!-- Cloudflare 高级参数 -->
         <div id="cfParams" class="advanced-section">
             <div class="param-grid">
                 <div>
@@ -1344,7 +1346,7 @@ function getHtml() {
                     <input type="text" id="ip6" placeholder="2606:4700::, 2606:4700::1">
                 </div>
                 <div>
-                    <label>优选域名 <span class="badge badge-cf">cf</span></label>
+                    <label>优选域名<span class="badge badge-cf">cf</span></label>
                     <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 </div>
                 <div>
@@ -1369,7 +1371,6 @@ function getHtml() {
             </div>
         </div>
 
-        <!-- Meta 高级参数 -->
         <div id="metaParams" class="advanced-section">
             <div class="param-grid">
                 <div>
@@ -1381,13 +1382,12 @@ function getHtml() {
                     <input type="text" id="metaIp6" placeholder="2a03:2880:...">
                 </div>
                 <div>
-                    <label>优选域名<span class="badge badge-meta">meta</span></label>
+                    <label>优选域名 <span class="badge badge-meta">meta</span></label>
                     <input type="text" id="metaDomain" placeholder="meta-better.example.com">
                 </div>
             </div>
         </div>
 
-        <!-- 自定义 Client IP -->
         <div class="global-section">
             <label for="clientIp">自定义 Client IP (ECS) <span style="font-weight:normal;font-size:0.8em;">留空自动获取</span></label>
             <input type="text" id="clientIp" placeholder="8.8.8.8 或 IPv6" style="margin-bottom:0">
@@ -1396,13 +1396,14 @@ function getHtml() {
         <button id="queryBtn" onclick="doQuery()">
             <span id="btnText">🔍 开始查询</span>
         </button>
-  <div id="requestUrlContainer" style="display:none;">
+
+        <div id="requestUrlContainer" style="display:none;">
             <div class="request-url-box">
-                <span>当前查询 DoH 地址：</span>
+                <span>DoH:</span>
                 <code id="requestUrlText"></code>
                 <button class="copy-btn" id="copyBtn" onclick="copyUrl()">复制</button>
             </div>
-        </div>        
+        </div>
         <div id="result" class="result-box" style="display: none;"></div>
         <div class="footer">
             <span>DOH-ECH · Cloudflare Pages · </span>
@@ -1423,9 +1424,10 @@ function getHtml() {
 
         function updateBestLabel() {
             const checked = document.getElementById('best').checked;
-            document.getElementById('bestLabel').textContent = checked ? '全局跟随优选' : '全局跟随优选(关)';
+            document.getElementById('bestLabel').textContent = checked ? '全局跟随优选' : '全局跟随优选（关）';
         }
-async function copyUrl() {
+
+        async function copyUrl() {
             const url = document.getElementById('requestUrlText').textContent;
             try {
                 await navigator.clipboard.writeText(url);
@@ -1433,7 +1435,6 @@ async function copyUrl() {
                 btn.textContent = '已复制';
                 setTimeout(() => { btn.textContent = '复制'; }, 1500);
             } catch (err) {
-                // Fallback for older browsers or non-HTTPS
                 const textArea = document.createElement('textarea');
                 textArea.value = url;
                 document.body.appendChild(textArea);
@@ -1445,6 +1446,47 @@ async function copyUrl() {
                 setTimeout(() => { btn.textContent = '复制'; }, 1500);
             }
         }
+
+        // 构建仅包含自定义参数的 /ech URL
+        function buildEchUrl() {
+            const params = new URLSearchParams();
+            const mode = document.getElementById('mode').value;
+
+            // 全局参数
+            const bestChecked = document.getElementById('best').checked;
+            if (bestChecked) params.set('best', 'true');
+            const clientIp = document.getElementById('clientIp').value.trim();
+            if (clientIp) params.set('clientIp', clientIp);
+
+            if (mode === 'cf') {
+                const ip4 = document.getElementById('ip4').value.trim();
+                const ip6 = document.getElementById('ip6').value.trim();
+                const cfDomain = document.getElementById('cfDomain').value.trim();
+                const echDomain = document.getElementById('echDomain').value.trim();
+                const sub = document.getElementById('sub').value.trim();
+                const exclude = document.getElementById('exclude').value.trim();
+                const shuffleChecked = document.getElementById('shuffle').checked;
+                if (ip4) params.set('ip4', ip4);
+                if (ip6) params.set('ip6', ip6);
+                if (cfDomain) params.set('cf', cfDomain);
+                if (echDomain) params.set('ech', echDomain);
+                if (sub) params.set('sub', sub);
+                if (exclude) params.set('exclude', exclude);
+                if (!shuffleChecked) params.set('shuffle', 'false');
+            } else if (mode === 'meta') {
+                const metaIp4 = document.getElementById('metaIp4').value.trim();
+                const metaIp6 = document.getElementById('metaIp6').value.trim();
+                const metaDomain = document.getElementById('metaDomain').value.trim();
+                if (metaIp4) params.set('metaIp4', metaIp4);
+                if (metaIp6) params.set('metaIp6', metaIp6);
+                if (metaDomain) params.set('meta', metaDomain);
+            }
+
+            const base = window.location.origin + '/ech';
+            const qs = params.toString();
+            return qs ? base + '?' + qs : base;
+        }
+
         async function doQuery() {
             const domain = document.getElementById('domain').value.trim();
             const type = document.getElementById('type').value;
@@ -1452,16 +1494,25 @@ async function copyUrl() {
             const btn = document.getElementById('queryBtn');
             const btnText = document.getElementById('btnText');
             const resultDiv = document.getElementById('result');
+            const requestUrlContainer = document.getElementById('requestUrlContainer');
+            const requestUrlText = document.getElementById('requestUrlText');
+
             if (!domain) {
                 resultDiv.innerHTML = '<span class="error">请输入域名</span>';
                 resultDiv.className = 'result-box error';
                 resultDiv.style.display = 'block';
+                requestUrlContainer.style.display = 'none';
                 return;
             }
+
+            // 显示仅包含自定义参数的 /ech 地址
+            requestUrlText.textContent = buildEchUrl();
+            requestUrlContainer.style.display = 'block';
+
+            // 构建实际查询用的 API URL
             const params = new URLSearchParams();
             params.set('domain', domain);
             params.set('type', type);
-            
             const bestChecked = document.getElementById('best').checked;
             params.set('best', bestChecked ? 'true' : 'false');
 
@@ -1491,11 +1542,6 @@ async function copyUrl() {
             const clientIp = document.getElementById('clientIp').value.trim();
             if (clientIp) params.set('clientIp', clientIp);
 
-            // 显示请求的 URL
-            const baseUrl = window.location.origin + '/ech';
-            const fullUrl = baseUrl + '?' + params.toString();
-            requestUrlText.textContent = fullUrl;
-            requestUrlContainer.style.display = 'block';
             btn.disabled = true;
             btnText.textContent = '⏳ 查询中...';
             resultDiv.className = 'result-box loading';
@@ -1520,7 +1566,6 @@ async function copyUrl() {
             }
         }
 
-        // 初始化标签
         updateBestLabel();
     </script>
 </body>
