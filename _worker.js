@@ -627,6 +627,20 @@ async function queryUpstreamDNS(name, type, clientIP = '') {
 }
 
 async function fetchRealEch(echDomain, clientIP) {
+    // 先尝试从自定义域名获取
+    let ech = await fetchRealEchFromDomain(echDomain, clientIP);
+    if (ech) return ech;
+    
+    // 如果失败且自定义域名不是默认域名，回退到默认域名
+    if (echDomain !== 'cloudflare-ech.com') {
+        console.log(`[ECH] ${echDomain} 无公钥，回退到 cloudflare-ech.com`);
+        return await fetchRealEchFromDomain('cloudflare-ech.com', clientIP);
+    }
+    return null;
+}
+
+// 提取原有逻辑到新函数
+async function fetchRealEchFromDomain(echDomain, clientIP) {
     const cacheKey = `ech:${echDomain}`;
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
@@ -645,7 +659,6 @@ async function fetchRealEch(echDomain, clientIP) {
     } catch {}
     return null;
 }
-
 function parseHttpsRecord(dataStr) {
     const parts = dataStr.split(/\s+/);
     if (parts.length < 3) return null;
