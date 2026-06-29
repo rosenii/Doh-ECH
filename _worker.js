@@ -371,18 +371,49 @@ async function applySubConfig(config) {
     );
     const areaFilter = (config.area || '').trim().toLowerCase();
 
-    // 中英文地区映射表
+    // 中英文地区映射表（新增三字码）
     const areaMap = {
-        'hk': '香港',
-        'sg': '新加坡',
-        'jp': '日本',
-        'kr': '韩国',
-        'us': '美国',
-        'uk': '英国',
-        'de': '德国',
-        'tw': '台湾',
-        'mo': '澳门',
-        // 可根据需要扩展
+        'hk': '香港',   'hkg': '香港',
+        'sg': '新加坡', 'sin': '新加坡',
+        'jp': '日本',   'tyo': '东京', 'nrt': '东京',
+        'kr': '韩国',   'sel': '首尔', 'icn': '首尔',
+        'us': '美国',   'lax': '洛杉矶', 'sfo': '旧金山', 'sea': '西雅图',
+        'uk': '英国',   'lhr': '伦敦', 'man': '曼彻斯特',
+        'de': '德国',   'fra': '法兰克福', 'ber': '柏林',
+        'tw': '台湾',   'tpe': '台北', 'khh': '高雄',
+        'mo': '澳门',   'mfm': '澳门',
+        'th': '泰国',   'bkk': '曼谷',
+        'vn': '越南',   'sgn': '胡志明', 'han': '河内',
+        'id': '印尼',   'cgk': '雅加达',
+        'ph': '菲律宾', 'mnl': '马尼拉',
+        'my': '马来西亚','kul': '吉隆坡',
+        'in': '印度',   'bom': '孟买', 'maa': '金奈',
+        'au': '澳大利亚','syd': '悉尼',
+        'fr': '法国',   'par': '巴黎',
+        'nl': '荷兰',   'ams': '阿姆斯特丹',
+        'ca': '加拿大', 'yvr': '温哥华', 'yyz': '多伦多',
+        'ru': '俄罗斯', 'mow': '莫斯科',
+        'ae': '阿联酋', 'dxb': '迪拜',
+        'sa': '沙特',   'jed': '吉达',
+        'za': '南非',   'jnb': '约翰内斯堡',
+        'br': '巴西',   'sao': '圣保罗',
+        'mx': '墨西哥', 'mex': '墨西哥城',
+        'ar': '阿根廷', 'eze': '布宜诺斯艾利斯',
+        'it': '意大利', 'mxp': '米兰',
+        'es': '西班牙', 'bcn': '巴塞罗那',
+        'ch': '瑞士',   'zrh': '苏黎世',
+        'se': '瑞典',   'arn': '斯德哥尔摩',
+        'no': '挪威',   'osl': '奥斯陆',
+        'fi': '芬兰',   'hel': '赫尔辛基',
+        'pl': '波兰',   'waw': '华沙',
+        'cz': '捷克',   'prg': '布拉格',
+        'at': '奥地利', 'vie': '维也纳',
+        'ie': '爱尔兰', 'dub': '都柏林',
+        'pt': '葡萄牙', 'lis': '里斯本',
+        'gr': '希腊',   'ath': '雅典',
+        'il': '以色列', 'tlv': '特拉维夫',
+        'tr': '土耳其', 'ist': '伊斯坦布尔'
+        // 可根据需要继续扩展
     };
 
     const entries = sub.split(',').map(s => s.trim()).filter(s => s);
@@ -433,15 +464,12 @@ async function applySubConfig(config) {
                     comment = line.substring(commentIndex + 1).trim();
                     line = line.substring(0, commentIndex).trim();
                 }
-                // 地区过滤
                 if (areaFilter && comment) {
                     const commentLower = comment.toLowerCase();
                     const keywords = areaFilter.split(',').map(k => k.trim()).filter(k => k);
                     if (keywords.length > 0) {
                         const matched = keywords.some(keyword => {
-                            // 检查英文关键词
                             if (commentLower.includes(keyword)) return true;
-                            // 检查对应的中文名称
                             const chineseName = areaMap[keyword];
                             if (chineseName && comment.includes(chineseName)) return true;
                             return false;
@@ -488,7 +516,6 @@ async function applySubConfig(config) {
         config.cfDomain = Array.from(allDomains).join(',');
     }
 }
-
 // ===================== 工具函数 =====================
 function parseIpList(raw, doShuffle = true) {
     if (!raw) return [];
