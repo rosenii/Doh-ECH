@@ -19,7 +19,7 @@
 - **前端网页测试查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
 - **DOH地址(完整参数示例)**：  
   ```
-   "https://your-domain.pages.dev/ech?best=true&clientIp=1.2.4.8&cf=ip.sb&ip4=1.2.3.4,5.6.7.8&ip6=::&meta=fbcdn.net&metaIp4=5.6.7.8&metaIp6=::"
+   "https://your-domain.pages.dev/ech?sub=ip-https://bestcf.pages.dev/gslege/Cfxyz.txt&best=true&shuffle=true&area=hk,jp,sg,us&exclude=bestcf.pages.dev&clientIp=1.2.4.8&cf=ip.sb,cloudflare-ech.com&ip4=162.159.39.22&ip6=2606:4700:839f:4fd6:ee45:836d:51a4:87b6"
   ```
 - **配置 DoH 客户端**：  
   -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过 URL 参数传递自定义内容。
