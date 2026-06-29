@@ -57,6 +57,7 @@
 | `sub` | CF优选订阅链接 |格式（`ip-https://ip.txt`/ `cf-https://domain.txt` ） |``|
 | `exclude` | 返回记录排除指定ip/domain |（`1.1.1.1`/ `cf.cf` ） |``|
 | `shuffle` |  乱序返回记录 |默认`false`（`false`/ `true` ） |`false`|
+| `area` |  指定ip区域 |留空`不过滤`（`area=hk,sg,jp` ） |``|
 
 > **注意**：`cf`,`meta` 参数仅当目标域名为 CF/META站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF/META 域名。
 
