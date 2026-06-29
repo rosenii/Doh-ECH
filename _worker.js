@@ -9,6 +9,7 @@
  * - sub参数  多订阅缓存 
  * - exclude参数 过滤排除不合适的优选ip/domain
  * - shuffle 参数 返回记录随机乱序开关 默认false
+ * - area 参数   返回订阅列表指定区域的ip记录
  */
 
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -1531,6 +1532,8 @@ function getHtml() {
                 const sub = document.getElementById('sub').value.trim();
                 const exclude = document.getElementById('exclude').value.trim();
                 const shuffleChecked = document.getElementById('shuffle').checked;
+                const area = document.getElementById('area').value.trim();
+                if (area) params.set('area', area);
                 if (ip4) params.set('ip4', ip4);
                 if (ip6) params.set('ip6', ip6);
                 if (cfDomain) params.set('cf', cfDomain);
@@ -1561,8 +1564,6 @@ function getHtml() {
             const resultDiv = document.getElementById('result');
             const requestUrlContainer = document.getElementById('requestUrlContainer');
             const requestUrlText = document.getElementById('requestUrlText');
-const area = document.getElementById('area').value.trim();
-if (area) params.set('area', area);
             if (!domain) {
                 resultDiv.innerHTML = '<span class="error">请输入域名</span>';
                 resultDiv.className = 'result-box error';
@@ -1590,6 +1591,8 @@ if (area) params.set('area', area);
                 const sub = document.getElementById('sub').value.trim();
                 const exclude = document.getElementById('exclude').value.trim();
                 const shuffleChecked = document.getElementById('shuffle').checked;
+                const area = document.getElementById('area').value.trim();
+                if (area) params.set('area', area);
                 if (ip4) params.set('ip4', ip4);
                 if (ip6) params.set('ip6', ip6);
                 if (cfDomain) params.set('cf', cfDomain);
