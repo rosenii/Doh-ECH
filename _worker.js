@@ -1411,7 +1411,7 @@ function getHtml() {
                     <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 </div>
                 <div>
-                    <label>outer-sni <span class="badge badge-cf">ech</span></label>
+                    <label>ech配置获取来源 <span class="badge badge-cf">ech</span></label>
                     <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
                 </div>
                 <div>
