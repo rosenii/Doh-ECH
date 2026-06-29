@@ -1425,8 +1425,6 @@ function getHtml() {
     <label>地区筛选 <span class="badge badge-cf">area</span></label>
     <input type="text" id="area" placeholder="hk, sg 等，留空全部">
 </div>
-            </div>
-            
             <div class="toggle-row" style="margin-top: 0.5rem;">
                 <label class="checkbox-container">
                     <input type="checkbox" id="shuffle" checked>
@@ -1434,6 +1432,8 @@ function getHtml() {
                     <span>随机乱序 IP</span>
                 </label>
             </div>
+            </div>
+            
         </div>
 
         <div id="metaParams" class="advanced-section">
