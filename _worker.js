@@ -79,7 +79,8 @@ async function handleDoHRequest(req, injectEch, ctx, clientIP) {
         best:       url.searchParams.get('best')    || req.headers.get('X-Best')    || 'false',
         sub:        url.searchParams.get('sub')     || req.headers.get('X-Sub')     || '',
         exclude:    url.searchParams.get('exclude') || req.headers.get('X-Exclude') || '',
-        shuffle:    url.searchParams.get('shuffle') || req.headers.get('X-Shuffle') || 'true'
+        shuffle:    url.searchParams.get('shuffle') || req.headers.get('X-Shuffle') || 'true',
+        area: url.searchParams.get('area') || req.headers.get('X-Area') || ''
     };
 
     await applySubConfig(config);
@@ -175,7 +176,8 @@ async function handleApiQuery(url, clientIP) {
         best:       url.searchParams.get('best')    || 'false',
         sub:        url.searchParams.get('sub')     || '',
         exclude:    url.searchParams.get('exclude') || '',
-        shuffle:    url.searchParams.get('shuffle') || 'true'
+        shuffle:    url.searchParams.get('shuffle') || 'true',
+        area: url.searchParams.get('area') || req.headers.get('X-Area') || ''
     };
 
     await applySubConfig(config);
@@ -357,7 +359,7 @@ async function buildMetaEchResponse(config, domain, clientIP) {
     ], ipv4Hints, ipv6Hints);
 }
 
-// ==================== sub 订阅处理（多订阅、缓存、排除、端口清理） ====================
+// ==================== sub 订阅处理（多订阅、缓存、推广排除、地区过滤） ====================
 async function applySubConfig(config) {
     const sub = config.sub;
     if (!sub) return;
@@ -367,6 +369,21 @@ async function applySubConfig(config) {
             .map(s => s.trim())
             .filter(s => s)
     );
+    const areaFilter = (config.area || '').trim().toLowerCase();
+
+    // 中英文地区映射表
+    const areaMap = {
+        'hk': '香港',
+        'sg': '新加坡',
+        'jp': '日本',
+        'kr': '韩国',
+        'us': '美国',
+        'uk': '英国',
+        'de': '德国',
+        'tw': '台湾',
+        'mo': '澳门',
+        // 可根据需要扩展
+    };
 
     const entries = sub.split(',').map(s => s.trim()).filter(s => s);
     const allIps = new Set();
@@ -410,10 +427,31 @@ async function applySubConfig(config) {
             .map(line => line.trim())
             .filter(line => line && !line.startsWith('#'))
             .map(line => {
+                let comment = '';
                 const commentIndex = line.indexOf('#');
-                if (commentIndex !== -1) line = line.substring(0, commentIndex).trim();
+                if (commentIndex !== -1) {
+                    comment = line.substring(commentIndex + 1).trim();
+                    line = line.substring(0, commentIndex).trim();
+                }
+                // 地区过滤
+                if (areaFilter && comment) {
+                    const commentLower = comment.toLowerCase();
+                    const keywords = areaFilter.split(',').map(k => k.trim()).filter(k => k);
+                    if (keywords.length > 0) {
+                        const matched = keywords.some(keyword => {
+                            // 检查英文关键词
+                            if (commentLower.includes(keyword)) return true;
+                            // 检查对应的中文名称
+                            const chineseName = areaMap[keyword];
+                            if (chineseName && comment.includes(chineseName)) return true;
+                            return false;
+                        });
+                        if (!matched) return null;
+                    }
+                }
                 return line;
             })
+            .filter(item => item !== null)
             .map(line => {
                 if (type === 'ip') {
                     if (line.startsWith('[') && line.includes(']:')) {
@@ -1363,7 +1401,12 @@ function getHtml() {
                     <label>排除项 <span class="badge badge-cf">exclude</span></label>
                     <input type="text" id="exclude" placeholder="1.2.3.4,bad.example.com">
                 </div>
+                <div>
+    <label>地区筛选 <span class="badge badge-cf">area</span></label>
+    <input type="text" id="area" placeholder="hk, sg 等，留空全部">
+</div>
             </div>
+            
             <div class="toggle-row" style="margin-top: 0.5rem;">
                 <label class="checkbox-container">
                     <input type="checkbox" id="shuffle" checked>
@@ -1498,7 +1541,8 @@ function getHtml() {
             const resultDiv = document.getElementById('result');
             const requestUrlContainer = document.getElementById('requestUrlContainer');
             const requestUrlText = document.getElementById('requestUrlText');
-
+const area = document.getElementById('area').value.trim();
+if (area) params.set('area', area);
             if (!domain) {
                 resultDiv.innerHTML = '<span class="error">请输入域名</span>';
                 resultDiv.className = 'result-box error';
