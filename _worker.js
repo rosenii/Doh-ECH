@@ -64,27 +64,46 @@ export default {
         return new Response(getHtml(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 };
-
+//========== config公共构建函数 ==========
+async function buildMetaEchResponse(config, domain, clientIP) {
+    const doShuffle = config.shuffle !== 'false';
+    const ipv4Hints = await collectHints(1, config, false, clientIP, doShuffle);
+    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, false, clientIP, doShuffle) : [];
+    return packHttpsParamsWithHints(1, ".", [
+        { key: 'alpn', val: 'h2,h3' },
+        { key: 'ech', val: META_ECH_CONFIG }
+    ], ipv4Hints, ipv6Hints);
+}
+function buildConfig(url, headers = null) {
+    const get = (param, headerName) => {
+        const fromUrl = url.searchParams.get(param);
+        if (fromUrl) return fromUrl;
+        if (headers) {
+            const fromHeader = headers.get(headerName);
+            if (fromHeader) return fromHeader;
+        }
+        return '';
+    };
+    return {
+        ip4:        get('ip4',     'X-Ip4'),
+        ip6:        get('ip6',     'X-Ip6'),
+        metaIp4:    get('metaIp4', 'X-MetaIp4'),
+        metaIp6:    get('metaIp6', 'X-MetaIp6'),
+        cfDomain:   get('cf',      'X-CF'),
+        metaDomain: get('meta',    'X-Meta'),
+        echDomain:  get('ech',     'X-ECH')     || 'cloudflare-ech.com',
+        best:       get('best',    'X-Best')    || 'false',
+        sub:        get('sub',     'X-Sub'),
+        exclude:    get('exclude', 'X-Exclude'),
+        shuffle:    get('shuffle', 'X-Shuffle') || 'true',
+        area:       get('area',    'X-Area'),
+    };
+}
 // ========== DoH 处理 ==========
 async function handleDoHRequest(req, injectEch, ctx, clientIP) {
     const url = new URL(req.url);
-    const config = {
-        ip4:        url.searchParams.get('ip4')     || req.headers.get('X-Ip4')     || '',
-        ip6:        url.searchParams.get('ip6')     || req.headers.get('X-Ip6')     || '',
-        metaIp4:    url.searchParams.get('metaIp4') || req.headers.get('X-MetaIp4') || '',
-        metaIp6:    url.searchParams.get('metaIp6') || req.headers.get('X-MetaIp6') || '',
-        cfDomain:   url.searchParams.get('cf')      || req.headers.get('X-CF')      || '',
-        metaDomain: url.searchParams.get('meta')    || req.headers.get('X-Meta')    || '',
-        echDomain:  url.searchParams.get('ech')     || req.headers.get('X-ECH')     || 'cloudflare-ech.com',
-        best:       url.searchParams.get('best')    || req.headers.get('X-Best')    || 'false',
-        sub:        url.searchParams.get('sub')     || req.headers.get('X-Sub')     || '',
-        exclude:    url.searchParams.get('exclude') || req.headers.get('X-Exclude') || '',
-        shuffle:    url.searchParams.get('shuffle') || req.headers.get('X-Shuffle') || 'true',
-        area: url.searchParams.get('area') || req.headers.get('X-Area') || ''
-    };
-
+   const config = buildConfig(url, req.headers);
     await applySubConfig(config);
-
     if (req.method === 'POST') {
         const buf = await req.arrayBuffer();
         if (injectEch) return handleDnsQuery(buf, config, ctx, clientIP);
@@ -164,22 +183,7 @@ async function handleApiQuery(url, clientIP) {
     const type = url.searchParams.get('type')?.toUpperCase() || 'A';
     if (!domain) return json({ error: '缺少 domain' }, 400);
     if (!['A', 'AAAA', 'HTTPS'].includes(type)) return json({ error: '类型不支持' }, 400);
-
-    const config = {
-        ip4:        url.searchParams.get('ip4')     || '',
-        ip6:        url.searchParams.get('ip6')     || '',
-        metaIp4:    url.searchParams.get('metaIp4') || '',
-        metaIp6:    url.searchParams.get('metaIp6') || '',
-        cfDomain:   url.searchParams.get('cf')      || '',
-        metaDomain: url.searchParams.get('meta')    || '',
-        echDomain:  url.searchParams.get('ech')     || 'cloudflare-ech.com',
-        best:       url.searchParams.get('best')    || 'false',
-        sub:        url.searchParams.get('sub')     || '',
-        exclude:    url.searchParams.get('exclude') || '',
-        shuffle:    url.searchParams.get('shuffle') || 'true',
-        area: url.searchParams.get('area') || req.headers.get('X-Area') || ''
-    };
-
+    const config = buildConfig(url); // 无需 headers
     await applySubConfig(config);
 
     try {
@@ -348,17 +352,6 @@ async function buildCFEchResponse(config, domain, clientIP) {
         { key: 'ech', val: ech }
     ], ipv4Hints, ipv6Hints);
 }
-
-async function buildMetaEchResponse(config, domain, clientIP) {
-    const doShuffle = config.shuffle !== 'false';
-    const ipv4Hints = await collectHints(1, config, false, clientIP, doShuffle);
-    const ipv6Hints = !isDomainIpv4Only(domain) ? await collectHints(28, config, false, clientIP, doShuffle) : [];
-    return packHttpsParamsWithHints(1, ".", [
-        { key: 'alpn', val: 'h2,h3' },
-        { key: 'ech', val: META_ECH_CONFIG }
-    ], ipv4Hints, ipv6Hints);
-}
-
 // ==================== sub 订阅处理（多订阅、缓存、推广排除、地区过滤） ====================
 async function applySubConfig(config) {
     const sub = config.sub;
