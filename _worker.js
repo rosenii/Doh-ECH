@@ -209,17 +209,34 @@ async function resolveDNS(domain, type, config, clientIP) {
     let effectiveCF = origStaticCF;
     let effectiveMeta = origStaticMeta;
 
-    if (!origStaticCF && !origStaticMeta && best) {
-        const probe = await activeProbeOwner(domain, null, clientIP);
-        if (probe) {
-            if (probe.owner === 'CF') effectiveCF = true;
-            else if (probe.owner === 'META') effectiveMeta = true;
+    // 获取归属（用于 ECH 注入，与 best 无关）
+    let owner = effectiveCF ? 'CF' : (effectiveMeta ? 'META' : null);
+
+    // 如果非静态域名，尝试从缓存或探测获取归属（仅在 HTTPS 查询或 best=true 时需要）
+    if (!owner && (type === 'HTTPS' || best)) {
+        // 先检查缓存
+        const probeCacheKey = `owner:${domain}`;
+        const cachedProbe = cacheMap.get(probeCacheKey);
+        if (cachedProbe && Date.now() < cachedProbe.expire && cachedProbe.value) {
+            owner = cachedProbe.value.owner;
+        } else if (best || type === 'HTTPS') {
+            // 缓存未命中且需要归属时，主动探测
+            const probe = await activeProbeOwner(domain, null, clientIP);
+            if (probe) {
+                owner = probe.owner;
+            }
+        }
+
+        // 将归属映射回 effectiveCF/effectiveMeta 以便后续 IP 替换（仅 best 时生效）
+        if (best) {
+            if (owner === 'CF') effectiveCF = true;
+            else if (owner === 'META') effectiveMeta = true;
         }
     }
 
-    const isStatic = effectiveCF || effectiveMeta;
-    const owner = effectiveCF ? 'CF' : (effectiveMeta ? 'META' : null);
+    const isStatic = effectiveCF || effectiveMeta; // 静态域名或 best 提升的域名
 
+    // A/AAAA 处理
     if (type === 'A' || type === 'AAAA') {
         if (isStatic) {
             return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
@@ -235,12 +252,33 @@ async function resolveDNS(domain, type, config, clientIP) {
         }
     }
 
+    // HTTPS 处理
     if (type === 'HTTPS') {
-        if (isStatic) {
-            return await buildStaticHttpsRecord(domain, config, clientIP, effectiveCF, effectiveMeta);
-        } else {
+        // 静态域名（含 best 提升）或探测到的 CF/Meta 域名都使用静态 HTTPS 构建
+        if (owner === 'CF' || owner === 'META') {
+            return await buildStaticHttpsRecord(domain, config, clientIP, owner === 'CF', owner === 'META');
+        }
+        // 增强模式（仅对非 CF/Meta 域名生效）
+        if (config.enhance && config.enhance !== 'off') {
             return await buildEnhancedHttpsRecord(domain, config, clientIP, owner);
         }
+        // 其他：返回上游原始记录
+        const upstreamData = await queryUpstreamDNS(domain, 65, clientIP);
+        if (!upstreamData) return { domain, type, error: '上游查询失败' };
+        const result = { domain, type, answers: [] };
+        if (upstreamData.Answer) {
+            const rec = upstreamData.Answer.find(r => r.type === 65);
+            if (rec) {
+                const parsed = parseHttpsRecordFull(rec.data);
+                if (parsed) {
+                    result.ech = parsed.ech || null;
+                    result.ipv4hints = parsed.ipv4hints || [];
+                    result.ipv6hints = parsed.ipv6hints || [];
+                    result.alpn = parsed.alpn || '';
+                }
+            }
+        }
+        return result;
     }
 
     return { domain, type, error: '未知类型' };
