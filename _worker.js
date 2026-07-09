@@ -1162,7 +1162,7 @@ function getHtml() {
         }
         input, select {
             width: 100%;
-            padding: 0.7rem 1rem;
+            padding: 0.5rem 1rem;
             margin-bottom: 1rem;
             background: rgba(255, 255, 255, 0.06);
             backdrop-filter: blur(10px);
@@ -1218,8 +1218,8 @@ function getHtml() {
             border-radius: 8px;
             font-size: 0.5rem;
             font-weight: 600;
-            margin-left: 6px;
-            margin-bottom: 2.5px;
+            margin-left: 4px;
+            margin-bottom: 2.8px;
             background: rgba(255,255,255,0.15);
             vertical-align: middle;
         }
@@ -1531,7 +1531,7 @@ function getHtml() {
         <div id="enhanceParams" class="advanced-section">
             <div class="param-grid">
                 <div>
-                    <label>增强模式 <span class="badge badge-enhance">enhance</span></label>
+                    <label>增强模式<span class="badge badge-enhance">enhance</span></label>
                     <select id="enhance">
                         <option value="off">关闭</option>
                         <option value="rule">规则模式</option>
@@ -1539,7 +1539,7 @@ function getHtml() {
                     </select>
                 </div>
                 <div>
-                    <label>自定义规则 <span class="badge badge-enhance">rules</span></label>
+                    <label>规则 <span class="badge badge-enhance">rules</span></label>
                     <input type="text" id="rules" placeholder="*.reddit.com:ip1,ip2;google.com:ip3">
                 </div>
             </div>
