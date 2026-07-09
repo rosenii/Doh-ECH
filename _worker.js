@@ -654,7 +654,17 @@ function packHttpsParams(priority, target, params) {
     for (const b of paramBufs) { res.set(b, offset); offset += b.length; }
     return res;
 }
-
+function parseRawHttpsRecord(dataStr) {
+    const parts = dataStr.split(/\s+/);
+    if (parts.length < 3) return [];
+    const params = [];
+    for (let i = 2; i < parts.length; i++) {
+        const eqIdx = parts[i].indexOf('=');
+        if (eqIdx === -1) continue;
+        params.push({ key: parts[i].substring(0, eqIdx), val: parts[i].substring(eqIdx + 1) });
+    }
+    return params;
+}
 function encodeSvcParam(key, value) {
     const ids = { 'alpn': 1, 'ech': 5, 'ipv4hint': 4, 'ipv6hint': 6 };
     const id = ids[key];
@@ -781,21 +791,165 @@ function dnsResponse(buffer) {
     });
 }
 
-// IP 转换
-function extractIpsFromPacket(buffer) { /* ... */ }
-function formatIPv6(bytes) { /* ... */ }
-function formatIPv6FromBytes(bytes) { return formatIPv6(bytes); }
-function ipToLong(ip) { /* ... */ }
-function ipv6ToBigInt(ip) { /* ... */ }
-function ipToBytes(ip) { return new Uint8Array(ip.split('.').map(Number)); }
-function ipv6ToBytes(ip) { /* ... */ }
-function bytesToIp(bytes) { return Array.from(bytes).join('.'); }
-function bytesToIp6(bytes) { return formatIPv6(bytes); }
+// ===================== 完整的 IP 转换与 CIDR 工具 =====================
 
-// CIDR 编译与匹配
-function compileCidrs(cidrList) { /* ... */ }
-function isIpInCidrs(ip, compiled) { /* ... */ }
+// 从二进制 DNS 响应包中提取 IP 地址
+function extractIpsFromPacket(buffer) {
+    const ips = [];
+    const view = new DataView(buffer);
+    if (buffer.byteLength < 12) return [];
+    const ancount = view.getUint16(6);
+    const totalRecords = ancount + view.getUint16(8) + view.getUint16(10);
+    let offset = 12;
+    try {
+        for (let i = 0; i < view.getUint16(4); i++) {
+            while (view.getUint8(offset) !== 0) {
+                if ((view.getUint8(offset) & 0xC0) === 0xC0) { offset += 1; break; }
+                offset += view.getUint8(offset) + 1;
+            }
+            offset += 5;
+        }
+        for (let i = 0; i < totalRecords; i++) {
+            while (view.getUint8(offset) !== 0) {
+                if ((view.getUint8(offset) & 0xC0) === 0xC0) { offset += 1; break; }
+                offset += view.getUint8(offset) + 1;
+            }
+            offset += 1;
+            const type = view.getUint16(offset); offset += 8;
+            const rdlen = view.getUint16(offset); offset += 2;
+            if (type === 1 && rdlen === 4) {
+                ips.push(Array.from(new Uint8Array(buffer.slice(offset, offset + 4))).join('.'));
+            } else if (type === 28 && rdlen === 16) {
+                const raw = new Uint8Array(buffer.slice(offset, offset + 16));
+                ips.push(formatIPv6(raw));
+            }
+            offset += rdlen;
+        }
+    } catch (e) {}
+    return ips;
+}
 
+// IPv6 字节数组 -> 压缩格式字符串
+function formatIPv6(bytes) {
+    const parts = [];
+    for (let i = 0; i < 16; i += 2) {
+        parts.push(((bytes[i] << 8) | bytes[i + 1]).toString(16));
+    }
+    let longestStart = -1, longestLen = 0;
+    let currentStart = -1, currentLen = 0;
+    for (let i = 0; i < parts.length; i++) {
+        if (parts[i] === '0') {
+            if (currentStart === -1) currentStart = i;
+            currentLen++;
+            if (currentLen > longestLen) {
+                longestLen = currentLen;
+                longestStart = currentStart;
+            }
+        } else {
+            currentStart = -1;
+            currentLen = 0;
+        }
+    }
+    if (longestLen > 1) {
+        parts.splice(longestStart, longestLen, '');
+        if (longestStart === 0) parts.unshift('');
+        if (longestStart + longestLen === 8) parts.push('');
+    }
+    return parts.join(':').replace(/:{3,}/, '::');
+}
+
+// IPv4 字符串 -> 32 位无符号整数
+function ipToLong(ip) {
+    return ip.split('.').reduce((a, b) => (a << 8) + parseInt(b, 10), 0) >>> 0;
+}
+
+// IPv6 字符串 -> BigInt
+function ipv6ToBigInt(ip) {
+    let p = ip.split(':');
+    if (ip.includes('::')) {
+        const [f, s] = ip.split('::');
+        const fP = f ? f.split(':') : [];
+        const sP = s ? s.split(':') : [];
+        p = [...fP, ...Array(8 - fP.length - sP.length).fill('0'), ...sP];
+    }
+    return p.reduce((a, b) => (a << 16n) + BigInt(parseInt(b || '0', 16)), 0n);
+}
+
+// IPv4 字符串 -> 4 字节数组
+function ipToBytes(ip) {
+    return new Uint8Array(ip.split('.').map(Number));
+}
+
+// IPv6 字符串 -> 16 字节数组
+function ipv6ToBytes(ip) {
+    let p = ip.split(':');
+    if (ip.includes('::')) {
+        const [l, r] = ip.split('::');
+        const lp = l ? l.split(':') : [];
+        const rp = r ? r.split(':') : [];
+        p = [...lp, ...Array(8 - lp.length - rp.length).fill('0'), ...rp];
+    }
+    const b = new Uint8Array(16);
+    p.forEach((v, i) => {
+        const val = parseInt(v, 16) || 0;
+        b[i * 2] = val >> 8;
+        b[i * 2 + 1] = val & 0xFF;
+    });
+    return b;
+}
+
+// 字节数组 -> IPv4 字符串
+function bytesToIp(bytes) {
+    return Array.from(bytes).join('.');
+}
+
+// 字节数组 -> IPv6 字符串 (通过 formatIPv6)
+function bytesToIp6(bytes) {
+    return formatIPv6(bytes);
+}
+
+// 编译 CIDR 列表为范围对象数组
+function compileCidrs(cidrList) {
+    const v4 = [], v6 = [];
+    for (const cidr of cidrList) {
+        try {
+            const [ip, bitsStr] = cidr.split('/');
+            const bits = parseInt(bitsStr, 10);
+            if (ip.includes(':')) {
+                const mask = ~( (1n << (128n - BigInt(bits))) - 1n );
+                const ipBn = ipv6ToBigInt(ip);
+                v6.push({
+                    start: ipBn & mask,
+                    end: (ipBn & mask) | ( (1n << (128n - BigInt(bits))) - 1n )
+                });
+            } else {
+                const mask = ~((1 << (32 - bits)) - 1);
+                const ipNum = ipToLong(ip);
+                v4.push({
+                    start: (ipNum & mask) >>> 0,
+                    end: ((ipNum & mask) | ((1 << (32 - bits)) - 1)) >>> 0
+                });
+            }
+        } catch (e) {}
+    }
+    return { v4, v6 };
+}
+
+// 判断 IP 是否在编译后的范围内
+function isIpInCidrs(ip, compiled) {
+    if (ip.includes(':')) {
+        try {
+            const ipBn = ipv6ToBigInt(ip);
+            return compiled.v6.some(r => ipBn >= r.start && ipBn <= r.end);
+        } catch {}
+    } else {
+        try {
+            const ipNum = ipToLong(ip);
+            return compiled.v4.some(r => ipNum >= r.start && ipNum <= r.end);
+        } catch {}
+    }
+    return false;
+}
 // 归属探测
 async function activeProbeOwner(domain, ctx, clientIP) {
     const cacheKey = `owner:${domain}`;
@@ -822,8 +976,6 @@ async function activeProbeOwner(domain, ctx, clientIP) {
     cacheMap.set(cacheKey, { value: null, expire: Date.now() + 60000 });
     return null;
 }
-
-
 
 // 订阅处理
 async function applySubConfig(config) {
