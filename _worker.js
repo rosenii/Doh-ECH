@@ -938,7 +938,20 @@ const entries = sub.split(',').map(s => s.trim()).filter(s => s);
 function isDomainIpv4Only(domain) {
     return IPV4_ONLY_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 }
-
+function parseHttpsRecordFull(dataStr) {
+    const parts = dataStr.split(/\s+/);
+    if (parts.length < 3) return null;
+    const result = {};
+    for (let i = 2; i < parts.length; i++) {
+        const [k, v] = parts[i].split('=');
+        if (!k || !v) continue;
+        if (k === 'ech') result.ech = v;
+        else if (k === 'alpn') result.alpn = v;
+        else if (k === 'ipv4hint') result.ipv4hints = v.split(',').map(s => s.trim());
+        else if (k === 'ipv6hint') result.ipv6hints = v.split(',').map(s => s.trim());
+    }
+    return result;
+}
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
