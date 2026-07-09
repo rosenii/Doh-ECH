@@ -1162,7 +1162,7 @@ function getHtml() {
         }
         input, select {
             width: 100%;
-            padding: 0.2rem 1rem;
+            padding: 0.7rem 1rem;
             margin-bottom: 1rem;
             background: rgba(255, 255, 255, 0.06);
             backdrop-filter: blur(10px);
@@ -1218,8 +1218,8 @@ function getHtml() {
             border-radius: 8px;
             font-size: 0.5rem;
             font-weight: 600;
-            margin-left: 1px;
-            margin-bottom: 3px;
+            margin-left: 0.4px;
+            margin-bottom: 4.5px;
             background: rgba(255,255,255,0.15);
             vertical-align: middle;
         }
@@ -1484,7 +1484,7 @@ function getHtml() {
                     <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 </div>
                 <div>
-                    <label>ECH 来源域名 <span class="badge badge-cf">ech</span></label>
+                    <label>ECH来源域名 <span class="badge badge-cf">ech</span></label>
                     <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
                 </div>
                 <div>
