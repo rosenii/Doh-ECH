@@ -1162,7 +1162,7 @@ function getHtml() {
         }
         input, select {
             width: 100%;
-            padding: 0.5rem 1rem;
+            padding: 0.2rem 1rem;
             margin-bottom: 1rem;
             background: rgba(255, 255, 255, 0.06);
             backdrop-filter: blur(10px);
@@ -1170,7 +1170,7 @@ function getHtml() {
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 14px;
             color: var(--text);
-            font-size: 0.8rem;
+            font-size: 0.79rem;
             transition: all 0.2s;
             font-family: inherit;
             outline: none;
@@ -1218,8 +1218,8 @@ function getHtml() {
             border-radius: 8px;
             font-size: 0.5rem;
             font-weight: 600;
-            margin-left: 4px;
-            margin-bottom: 2.8px;
+            margin-left: 1px;
+            margin-bottom: 3px;
             background: rgba(255,255,255,0.15);
             vertical-align: middle;
         }
