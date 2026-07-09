@@ -39,7 +39,7 @@ const BUILTIN_HINTS = {
     "reddit.com": ["151.101.1.140", "151.101.65.140"],
     "*.reddit.com": ["151.101.1.140", "151.101.65.140"],
     "*.google.com": ["22001:4860:4827:7700:9876:5432:10fe:dcba"],
-    "*.googlevideo.com": ["2001:4860:4827:7700:9876:5432:10fe:dcba"]
+    "*.googlevideo.com": []
 };
 
 const RAW_META_CIDRS = [
@@ -356,7 +356,7 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
         if (owner === 'CF') {
             const v4 = config.ip4 ? parseIpList(config.ip4, doShuffle)
                 : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle)).map(bytesToIp)
-                : [DEFAULT_CF_IP];
+                : parseIpList(DEFAULT_CF_IP, doShuffle);   // 修复：统一使用 parseIpList
             const v6 = !isDomainIpv4Only(domain)
                 ? (config.ip6 ? parseIpList(config.ip6, doShuffle)
                     : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle)).map(formatIPv6FromBytes)
@@ -366,7 +366,7 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
         } else { // META
             const v4 = config.metaIp4 ? parseIpList(config.metaIp4, doShuffle)
                 : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle)).map(bytesToIp)
-                : [DEFAULT_META_IP];
+                : parseIpList(DEFAULT_META_IP, doShuffle); // 修复：统一使用 parseIpList
             const v6 = config.metaIp6 ? parseIpList(config.metaIp6, doShuffle)
                 : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 28, clientIP, doShuffle)).map(formatIPv6FromBytes)
                 : [];
@@ -385,7 +385,6 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
 
     return { ipv4: [], ipv6: [] };
 }
-
 /**
  * 统一的 HTTPS 记录构建与结果封装
  */
