@@ -198,76 +198,74 @@ async function handleApiQuery(url, clientIP) {
         return json({ error: e.message }, 500);
     }
 }
-
+/**
+ * 核心调度函数
+ */
 async function resolveDNS(domain, type, config, clientIP) {
     domain = domain.toLowerCase().replace(/\.$/, '');
     const best = config.best === 'true';
 
-    const origStaticCF = CF_STATIC_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
-    const origStaticMeta = META_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
+    // 1. 静态列表匹配
+    const isStaticCF = CF_STATIC_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
+    const isStaticMeta = META_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 
-    let effectiveCF = origStaticCF;
-    let effectiveMeta = origStaticMeta;
+    // 2. 归属 owner（用于 ECH 注入）
+    let owner = isStaticCF ? 'CF' : (isStaticMeta ? 'META' : null);
 
-    // 获取归属（用于 ECH 注入，与 best 无关）
-    let owner = effectiveCF ? 'CF' : (effectiveMeta ? 'META' : null);
+    // 辅助：从缓存或探测获取归属
+    const getOwner = async () => {
+        const key = `owner:${domain}`;
+        const cached = cacheMap.get(key);
+        if (cached && Date.now() < cached.expire) return cached.value?.owner || null;
+        const probe = await activeProbeOwner(domain, null, clientIP);
+        return probe?.owner || null;
+    };
 
-    // 如果非静态域名，尝试从缓存或探测获取归属（仅在 HTTPS 查询或 best=true 时需要）
-    if (!owner && (type === 'HTTPS' || best)) {
-        // 先检查缓存
-        const probeCacheKey = `owner:${domain}`;
-        const cachedProbe = cacheMap.get(probeCacheKey);
-        if (cachedProbe && Date.now() < cachedProbe.expire && cachedProbe.value) {
-            owner = cachedProbe.value.owner;
-        } else if (best || type === 'HTTPS') {
-            // 缓存未命中且需要归属时，主动探测
-            const probe = await activeProbeOwner(domain, null, clientIP);
-            if (probe) {
-                owner = probe.owner;
-            }
-        }
-
-        // 将归属映射回 effectiveCF/effectiveMeta 以便后续 IP 替换（仅 best 时生效）
-        if (best) {
-            if (owner === 'CF') effectiveCF = true;
-            else if (owner === 'META') effectiveMeta = true;
-        }
+    // HTTPS 查询时，若还不知道归属，尝试获取（为了 ECH）
+    if (!owner && type === 'HTTPS') {
+        owner = await getOwner();
     }
 
-    const isStatic = effectiveCF || effectiveMeta; // 静态域名或 best 提升的域名
+    // 3. 决定是否替换 A/AAAA（effectiveCF/effectiveMeta）
+    let effectiveCF = isStaticCF;
+    let effectiveMeta = isStaticMeta;
+    if (!effectiveCF && !effectiveMeta && best) {
+        const realOwner = owner || await getOwner();
+        if (realOwner === 'CF') effectiveCF = true;
+        else if (realOwner === 'META') effectiveMeta = true;
+    }
 
-    // A/AAAA 处理
+    // 4. A/AAAA 处理
     if (type === 'A' || type === 'AAAA') {
-        if (isStatic) {
+        if (effectiveCF || effectiveMeta) {
             return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
-        } else {
-            const dnsType = type === 'AAAA' ? 28 : 1;
-            const upstreamData = await queryUpstreamDNS(domain, dnsType, clientIP);
-            if (!upstreamData) return { domain, type, error: '上游查询失败' };
-            let answers = [];
-            if (upstreamData.Answer) {
-                answers = upstreamData.Answer.filter(r => r.type === dnsType).map(r => r.data);
-            }
-            return { domain, type, answers, ech: null };
         }
+        const dnsType = type === 'AAAA' ? 28 : 1;
+        const data = await queryUpstreamDNS(domain, dnsType, clientIP);
+        const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
+        return { domain, type, answers, ech: null };
     }
 
-    // HTTPS 处理
+    // 5. HTTPS 处理
     if (type === 'HTTPS') {
+        // ---------- CF/Meta 域名 ----------
         if (owner === 'CF' || owner === 'META') {
-        const isStaticList = origStaticCF || origStaticMeta;
-        return await buildStaticHttpsRecord(domain, config, clientIP, owner === 'CF', owner === 'META', isStaticList);
-            }
-        // 增强模式（仅对非 CF/Meta 域名生效）
-        if (config.enhance && config.enhance !== 'off') {
-            return await buildEnhancedHttpsRecord(domain, config, clientIP, owner);
+            // hints 策略：静态列表始终使用优选；CIDR 确认的域名跟随 best
+            const usePreferredHints = isStaticCF || isStaticMeta || best;
+            return await buildStaticHttpsRecord(domain, config, clientIP,
+                owner === 'CF', owner === 'META', usePreferredHints);
         }
-        // 其他：返回上游原始记录
-        const upstreamData = await queryUpstreamDNS(domain, 65, clientIP);
-        if (!upstreamData) return { domain, type, error: '上游查询失败' };
+
+        // ---------- 非 CF/Meta 域名 ----------
+        if (config.enhance && config.enhance !== 'off') {
+            return await buildEnhancedHttpsRecord(domain, config, clientIP);
+        }
+
+        // 增强关闭：返回上游原始 HTTPS 记录
+        const data = await queryUpstreamDNS(domain, 65, clientIP);
         const result = { domain, type, answers: [] };
-        if (upstreamData.Answer) {
-            const rec = upstreamData.Answer.find(r => r.type === 65);
+        if (data?.Answer) {
+            const rec = data.Answer.find(r => r.type === 65);
             if (rec) {
                 const parsed = parseHttpsRecordFull(rec.data);
                 if (parsed) {
@@ -284,6 +282,173 @@ async function resolveDNS(domain, type, config, clientIP) {
     return { domain, type, error: '未知类型' };
 }
 
+/**
+ * 为 CF/Meta 域名生成 HTTPS 记录（含 ECH）
+ * @param usePreferredHints - true 使用优选 IP，false 使用上游真实 IP
+ */
+async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, usePreferredHints) {
+    const alpn = config.alpn || 'h3,h2';
+    const owner = isCF ? 'CF' : 'META';
+    const source = usePreferredHints ? 'preferred' : 'real';
+
+    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, owner, source);
+
+    const params = [{ key: 'alpn', val: alpn }];
+    if (isCF) {
+        const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
+        if (ech) params.push({ key: 'ech', val: ech });
+    } else {
+        params.push({ key: 'ech', val: META_ECH_CONFIG });
+    }
+    return buildHttpsRecordFromParams(domain, params, ipv4, ipv6);
+}
+
+/**
+ * 为非 CF/Meta 域名增强 HTTPS 记录（ALPN + Hints，不注入 ECH）
+ */
+async function buildEnhancedHttpsRecord(domain, config, clientIP) {
+    const alpn = config.alpn || 'h3,h2';
+    const mode = config.enhance || 'off';
+    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, null, mode);
+
+    // 获取上游原始参数（保留 ech 等）
+    let upstreamParams = [];
+    try {
+        const data = await queryUpstreamDNS(domain, 65, clientIP);
+        if (data?.Answer) {
+            const rec = data.Answer.find(r => r.type === 65);
+            if (rec) upstreamParams = parseRawHttpsRecord(rec.data);
+        }
+    } catch (e) {}
+
+    const paramMap = new Map();
+    for (const p of upstreamParams) paramMap.set(p.key, p.val);
+    paramMap.set('alpn', alpn);
+    if (ipv4.length) paramMap.set('ipv4hint', ipv4.join(','));
+    if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
+
+    const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
+    return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
+}
+
+/**
+ * 统一的 IP hints 收集器
+ * @param source - 'preferred' | 'real' | 'rule' | 'full'
+ */
+async function collectIpHints(domain, config, clientIP, owner, source) {
+    const doShuffle = config.shuffle !== 'false';
+
+    // ----- 规则匹配（rule/full 下优先） -----
+    if (source === 'rule' || source === 'full') {
+        const matched = matchRule(domain, config);
+        if (matched.length > 0) {
+            const v4 = matched.filter(ip => !ip.includes(':'));
+            const v6 = matched.filter(ip => ip.includes(':'));
+            return {
+                ipv4: [...new Set(v4)].slice(0, 6),
+                ipv6: [...new Set(v6)].slice(0, 6)
+            };
+        }
+    }
+
+    // ----- 优选 IP（preferred） -----
+    if (source === 'preferred') {
+        if (owner === 'CF') {
+            const v4 = config.ip4 ? parseIpList(config.ip4, doShuffle)
+                : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle)).map(bytesToIp)
+                : [DEFAULT_CF_IP];
+            const v6 = !isDomainIpv4Only(domain)
+                ? (config.ip6 ? parseIpList(config.ip6, doShuffle)
+                    : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle)).map(formatIPv6FromBytes)
+                    : parseIpList(DEFAULT_CF_IP6, doShuffle))
+                : [];
+            return { ipv4: v4, ipv6: v6 };
+        } else { // META
+            const v4 = config.metaIp4 ? parseIpList(config.metaIp4, doShuffle)
+                : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle)).map(bytesToIp)
+                : [DEFAULT_META_IP];
+            const v6 = config.metaIp6 ? parseIpList(config.metaIp6, doShuffle)
+                : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 28, clientIP, doShuffle)).map(formatIPv6FromBytes)
+                : [];
+            return { ipv4: v4, ipv6: v6 };
+        }
+    }
+
+    // ----- 真实 IP（real / full） -----
+    if (source === 'real' || source === 'full') {
+        const [v4, v6] = await Promise.all([
+            resolveRealHints(domain, 1, clientIP),
+            resolveRealHints(domain, 28, clientIP)
+        ]);
+        return { ipv4: v4, ipv6: v6 };
+    }
+
+    return { ipv4: [], ipv6: [] };
+}
+
+/**
+ * 统一的 HTTPS 记录构建与结果封装
+ */
+function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
+    const httpsRecord = packHttpsParamsWithHints(1, ".", params, ipv4Hints, ipv6Hints);
+    const result = {
+        domain,
+        type: 'HTTPS',
+        answers: []
+    };
+    result.ech = params.find(p => p.key === 'ech')?.val || null;
+    result.httpsRecord = httpsRecord;
+    if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
+    if (ipv6Hints.length) result.ipv6hints = ipv6Hints;
+    return result;
+}
+
+/**
+ * 从上游 A/AAAA 记录获取真实 IP hints
+ */
+async function resolveRealHints(domain, type, clientIP) {
+    try {
+        const data = await queryUpstreamDNS(domain, type, clientIP);
+        if (data && data.Answer) {
+            const ips = data.Answer.filter(r => r.type === type).map(r => r.data);
+            return [...new Set(ips)].slice(0, 6);
+        }
+    } catch (e) {}
+    return [];
+}
+
+/**
+ * 解析上游原始的 HTTPS 记录字符串为键值对数组
+ */
+function parseRawHttpsRecord(dataStr) {
+    const parts = dataStr.split(/\s+/);
+    if (parts.length < 3) return [];
+    const params = [];
+    for (let i = 2; i < parts.length; i++) {
+        const eqIdx = parts[i].indexOf('=');
+        if (eqIdx === -1) continue;
+        const key = parts[i].substring(0, eqIdx);
+        const val = parts[i].substring(eqIdx + 1);
+        params.push({ key, val });
+    }
+    return params;
+}
+
+// 确保 parseHttpsRecordFull 也仍然存在（用于增强关闭时的 JSON 解析）
+function parseHttpsRecordFull(dataStr) {
+    const parts = dataStr.split(/\s+/);
+    if (parts.length < 3) return null;
+    const result = {};
+    for (let i = 2; i < parts.length; i++) {
+        const [k, v] = parts[i].split('=');
+        if (!k || !v) continue;
+        if (k === 'ech') result.ech = v;
+        else if (k === 'alpn') result.alpn = v;
+        else if (k === 'ipv4hint') result.ipv4hints = v.split(',').map(s => s.trim());
+        else if (k === 'ipv6hint') result.ipv6hints = v.split(',').map(s => s.trim());
+    }
+    return result;
+}
 async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) {
     if (type === 'AAAA') {
         if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
@@ -310,96 +475,6 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
         else ipList = parseIpList(DEFAULT_META_IP, config.shuffle !== 'false');
     }
     return { domain, type, answers: ipList, ech: null };
-}
-
-// 静态域名的 HTTPS 记录构建（不受增强模式影响）
-async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, isStaticList) {
-    const alpn = config.alpn || 'h3,h2';
-    const best = config.best === 'true';
-    // 静态列表域名 → 始终用优选 hints；CIDR 域名 → 根据 best 决定
-    const usePreferred = isStaticList || best;
-    const { ipv4, ipv6 } = await collectIpHints(
-        domain, config, clientIP,
-        isCF ? 'CF' : 'META',
-        usePreferred ? 'static' : 'full'   // best=false 时使用 'full' 从上游获取真实 IP
-    );
-    const params = [{ key: 'alpn', val: alpn }];
-    if (isCF) {
-        const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
-        if (ech) params.push({ key: 'ech', val: ech });
-    } else {
-        params.push({ key: 'ech', val: META_ECH_CONFIG });
-    }
-    return buildHttpsRecordFromParams(domain, params, ipv4, ipv6);
-}
-
-// 非静态域名的增强 HTTPS 记录构建
-async function buildEnhancedHttpsRecord(domain, config, clientIP, owner) {
-    const enhanceMode = config.enhance || 'off';
-    const alpn = config.alpn || 'h3,h2';
-    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, owner, enhanceMode);
-    const params = [{ key: 'alpn', val: alpn }];
-    // 仅为探测到的 CF/Meta 域名注入 ECH
-    if (owner === 'CF' || owner === 'META') {
-        const ech = owner === 'CF' ? await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP) : META_ECH_CONFIG;
-        if (ech) params.push({ key: 'ech', val: ech });
-    }
-    const httpsRecord = packHttpsParamsWithHints(1, ".", params, ipv4, ipv6);
-    const result = { domain, type: 'HTTPS', answers: [] };
-    result.ech = null;
-    if (httpsRecord) result.httpsRecord = httpsRecord;
-    if (ipv4.length) result.ipv4hints = ipv4;
-    if (ipv6.length) result.ipv6hints = ipv6;
-    return result;
-}
-
-async function collectIpHints(domain, config, clientIP, owner, enhanceMode) {
-    // 规则模式：有匹配就用，没有就返回空（无 hints）
-    if (enhanceMode === 'rule') {
-        const matchedIPs = matchRule(domain, config);
-        if (matchedIPs.length > 0) {
-            const v4 = matchedIPs.filter(ip => !ip.includes(':'));
-            const v6 = matchedIPs.filter(ip => ip.includes(':'));
-            return {
-                ipv4: [...new Set(v4)].slice(0, 6),
-                ipv6: [...new Set(v6)].slice(0, 6)
-            };
-        }
-        return { ipv4: [], ipv6: [] };
-    }
-
-    // 全局模式：优先使用规则匹配，未匹配才从上游获取
-    if (enhanceMode === 'full') {
-        const matchedIPs = matchRule(domain, config);
-        if (matchedIPs.length > 0) {
-            const v4 = matchedIPs.filter(ip => !ip.includes(':'));
-            const v6 = matchedIPs.filter(ip => ip.includes(':'));
-            return {
-                ipv4: [...new Set(v4)].slice(0, 6),
-                ipv6: [...new Set(v6)].slice(0, 6)
-            };
-        }
-        // 未匹配规则，从上游获取
-        const [hints4, hints6] = await Promise.all([
-            resolveRealHints(domain, 1, clientIP),
-            resolveRealHints(domain, 28, clientIP)
-        ]);
-        return { ipv4: hints4, ipv6: hints6 };
-    }
-
-    // 其他模式不填充 hints
-    return { ipv4: [], ipv6: [] };
-}
-
-async function resolveRealHints(domain, type, clientIP) {
-    try {
-        const data = await queryUpstreamDNS(domain, type, clientIP);
-        if (data && data.Answer) {
-            const ips = data.Answer.filter(r => r.type === type).map(r => r.data);
-            return [...new Set(ips)].slice(0, 6);
-        }
-    } catch (e) {}
-    return [];
 }
 
 function matchRule(domain, config) {
@@ -436,23 +511,7 @@ function matchDomainPattern(domain, pattern) {
     return domain === pattern;
 }
 
-function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
-    // 打包成二进制 HTTPS 记录（用于 DoH 响应）
-    const httpsRecord = packHttpsParamsWithHints(1, ".", params, ipv4Hints, ipv6Hints);   
-    // 构建 JSON API 返回结构
-    const result = {
-        domain,
-        type: 'HTTPS',
-        answers: []
-    };    
-    // 提取 ech 字段（如果存在）
-    result.ech = params.find(p => p.key === 'ech')?.val || null;
-    result.httpsRecord = httpsRecord;    
-    // 附加 hints
-    if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
-    if (ipv6Hints.length) result.ipv6hints = ipv6Hints;    
-    return result;
-}
+
 function parseRules(rulesStr) {
     const map = new Map();
     if (!rulesStr) return map;
