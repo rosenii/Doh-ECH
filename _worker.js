@@ -436,6 +436,23 @@ function matchDomainPattern(domain, pattern) {
     return domain === pattern;
 }
 
+function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
+    // 打包成二进制 HTTPS 记录（用于 DoH 响应）
+    const httpsRecord = packHttpsParamsWithHints(1, ".", params, ipv4Hints, ipv6Hints);   
+    // 构建 JSON API 返回结构
+    const result = {
+        domain,
+        type: 'HTTPS',
+        answers: []
+    };    
+    // 提取 ech 字段（如果存在）
+    result.ech = params.find(p => p.key === 'ech')?.val || null;
+    result.httpsRecord = httpsRecord;    
+    // 附加 hints
+    if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
+    if (ipv6Hints.length) result.ipv6hints = ipv6Hints;    
+    return result;
+}
 function parseRules(rulesStr) {
     const map = new Map();
     if (!rulesStr) return map;
