@@ -38,7 +38,7 @@ const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/Kr
 const BUILTIN_HINTS = {
     "reddit.com": ["151.101.1.140", "151.101.65.140"],
     "*.reddit.com": ["151.101.1.140", "151.101.65.140"],
-    "*.google.com": ["2001:4860:4827:7700::"],
+    "*.google.com": ["173.194.43.188","2001:4860:4827:7700::"],
     "*.googlevideo.com": ["2001:4860:4827:7700::"]
 };
 
@@ -1219,7 +1219,7 @@ function getHtml() {
             font-size: 0.5rem;
             font-weight: 600;
             margin-left: 0.4px;
-            margin-bottom: 4.5px;
+            margin-bottom: 3.8px;
             background: rgba(255,255,255,0.15);
             vertical-align: middle;
         }
@@ -1484,7 +1484,7 @@ function getHtml() {
                     <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 </div>
                 <div>
-                    <label>ECH来源域名 <span class="badge badge-cf">ech</span></label>
+                    <label>ECH 来源 <span class="badge badge-cf">ech</span></label>
                     <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
                 </div>
                 <div>
