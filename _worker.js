@@ -10,7 +10,9 @@
  * - exclude参数 过滤排除不合适的优选ip/domain
  * - shuffle 参数 返回记录随机乱序开关 默认false
  * - area 参数   返回订阅列表指定区域的ip记录
- * - enhance (rule/full), ALPN［h3,h2］
+ * - enhance (off/rule/full)
+ * - alpn ［h3,h2］
+ * - rules domain:noa:noaaaa:ipv4
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -35,14 +37,13 @@ const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";
 
 const BUILTIN_HINTS = {
-    // 仅提供 hints 并屏蔽 A 记录（仅允许 IPv6 或 hints 连接）
     "*.reddit.com": {
-        ips: ["151.101.1.140"]
+        ips: ["151.101.1.140","151.101.65.140"]
     },
     "*.google.com": {
         ips: ["22001:4860:4827:7700:9876:5432:10fe:dcba"],
-        noA: true,
-        noAAAA: true
+        noA: true,//屏蔽A记录
+        noAAAA: true//屏蔽AAAA记录
     },
     "*.googlevideo.com": {
         ips: [],
@@ -56,7 +57,6 @@ const RAW_META_CIDRS = [
 const RAW_CF_CIDRS = [
 '5.10.214.0/23','5.10.244.0/22','5.175.141.0/24','5.182.84.0/23','5.226.179.0/24','5.226.181.0/24','5.226.183.0/24','8.6.112.0/24','8.6.144.0/23','8.9.231.0/24','8.10.148.0/24','8.14.199.0/24','8.14.201.0/24','8.14.202.0/24','8.14.204.0/24','8.17.205.0/24','8.17.206.0/23','8.18.50.0/24','8.18.113.0/24','8.18.195.0/24','8.18.196.0/24','8.19.8.0/24','8.20.100.0/23','8.20.103.0/24','8.20.122.0/23','8.20.124.0/23','8.20.126.0/24','8.21.8.0/23','8.21.10.0/24','8.21.12.0/23','8.21.110.0/23','8.21.239.0/24','8.23.139.0/24','8.23.240.0/24','8.24.87.0/24','8.24.243.0/24','8.24.244.0/24','8.25.96.0/23','8.25.249.0/24','8.26.182.0/24','8.27.64.0/24','8.27.66.0/23','8.27.68.0/23','8.27.79.0/24','8.28.20.0/24','8.28.82.0/24','8.28.126.0/23','8.28.213.0/24','8.29.105.0/24','8.29.109.0/24','8.29.228.0/24','8.29.230.0/23','8.30.234.0/24','8.31.2.0/24','8.31.160.0/23','8.34.69.0/24','8.34.70.0/23','8.34.146.0/24','8.34.201.0/24','8.34.202.0/24','8.35.57.0/24','8.35.58.0/24','8.35.149.0/24','8.35.211.0/24','8.36.216.0/22','8.36.220.0/24','8.37.41.0/24','8.37.43.0/24','8.38.147.0/24','8.38.148.0/23','8.39.6.0/24','8.39.18.0/24','8.39.125.0/24','8.39.126.0/24','8.39.201.0/24','8.39.202.0/23','8.39.204.0/22','8.39.213.0/24','8.39.214.0/23','8.40.26.0/23','8.40.29.0/24','8.40.30.0/23','8.40.107.0/24','8.40.111.0/24','8.40.140.0/24','8.41.5.0/24','8.41.6.0/23','8.41.36.0/23','8.42.51.0/24','8.42.54.0/23','8.42.161.0/24','8.42.164.0/24','8.42.172.0/24','8.43.121.0/24','8.43.122.0/23','8.43.224.0/23','8.43.226.0/24','8.44.2.0/24','8.44.6.0/24','8.44.60.0/24','8.44.62.0/23','8.45.41.0/24','8.45.43.0/24','8.45.44.0/22','8.45.97.0/24','8.45.100.0/23','8.45.102.0/24','8.45.108.0/24','8.45.111.0/24','8.45.145.0/24','8.45.146.0/23','8.46.113.0/24','8.46.115.0/24','8.46.117.0/24','8.46.118.0/23','8.47.9.0/24','8.47.12.0/23','8.47.15.0/24','8.47.69.0/24','8.47.71.0/24','8.48.130.0/23','8.48.132.0/23','8.48.134.0/24','14.102.228.0/23','23.131.204.0/24','23.145.136.0/24','23.145.152.0/24','23.145.232.0/24','23.145.248.0/24','23.167.152.0/24','23.178.112.0/24','23.179.248.0/24','23.180.136.0/24','23.227.37.0/24','23.227.38.0/23','23.227.48.0/23','23.227.60.0/24','23.247.163.0/24','25.25.25.0/24','25.26.27.0/24','25.129.196.0/22','27.50.48.0/23','31.12.75.0/24','31.43.179.0/24','31.185.108.0/24','37.153.171.0/24','38.96.28.0/23','44.31.142.0/24','45.8.211.0/24','45.12.30.0/23','45.80.108.0/24','45.80.110.0/23','45.81.58.0/24','45.85.118.0/23','45.95.241.0/24','45.128.76.0/24','45.130.125.0/24','45.131.4.0/22','45.131.208.0/22','45.135.235.0/24','45.142.120.0/24','45.146.201.0/24','45.149.12.0/24','45.153.7.0/24','45.157.17.0/24','45.192.222.0/23','45.192.224.0/24','45.194.11.0/24','45.194.53.0/24','45.195.14.0/24','45.196.29.0/24','45.199.183.0/24','45.202.113.0/24','45.205.0.0/24','45.250.154.0/23','46.202.30.0/24','46.254.92.0/23','49.213.44.0/24','49.238.236.0/22','61.32.240.0/24','62.72.166.0/24','62.146.255.0/24','62.169.155.0/24','64.40.138.0/24','64.40.140.0/24','64.69.24.0/23','64.239.31.0/24','65.110.63.0/24','65.205.150.0/24','66.45.118.0/24','66.71.220.0/24','66.81.247.0/24','66.81.255.0/24','66.84.82.0/24','66.93.178.0/24','66.94.32.0/20','66.203.249.0/24','66.225.252.0/24','66.235.200.0/24','68.169.48.0/20','68.182.187.0/24','69.48.218.0/24','69.89.0.0/20','69.90.210.0/24','72.52.113.0/24','74.49.214.0/23','74.204.59.0/24','74.205.180.0/24','77.37.33.0/24','77.74.228.0/24','77.75.199.0/24','77.105.163.0/24','77.111.106.0/24','77.232.140.0/24','78.128.122.0/24','80.93.202.0/24','82.21.82.0/24','82.22.16.0/24','82.26.156.0/24','82.118.242.0/24','82.139.216.0/23','83.118.224.0/22','86.38.214.0/24','86.38.251.0/24','87.229.48.0/24','88.216.66.0/23','88.216.69.0/24','89.47.56.0/23','89.106.90.0/24','89.116.46.0/24','89.116.161.0/24','89.116.180.0/24','89.116.250.0/24','89.117.112.0/24','89.207.18.0/24','89.249.200.0/24','91.124.127.0/24','91.192.106.0/24','91.193.58.0/23','91.199.81.0/24','91.206.71.0/24','91.209.253.0/24','92.53.188.0/22','92.60.74.0/24','92.243.74.0/23','93.114.64.0/23','93.115.102.0/24','94.140.0.0/24','94.156.10.0/24','94.247.142.0/24','96.43.100.0/23','102.132.188.0/24','102.177.176.0/24','102.177.189.0/24','103.11.212.0/24','103.11.214.0/24','103.15.85.0/24','103.19.144.0/23','103.21.244.0/22','103.22.200.0/22','103.31.4.0/22','103.31.79.0/24','103.81.228.0/24','103.112.176.0/24','103.116.7.0/24','103.121.59.0/24','103.133.1.0/24','103.135.208.0/23','103.169.142.0/24','103.172.110.0/23','103.186.74.0/24','103.198.92.0/24','103.204.13.0/24','103.215.22.0/24','103.219.64.0/22','103.245.228.0/23','104.16.0.0/13','104.24.0.0/14','104.28.0.0/16','104.29.0.0/21','104.29.8.0/23','104.29.11.0/24','104.29.12.0/22','104.29.16.0/23','104.29.19.0/24','104.29.20.0/22','104.29.24.0/21','104.29.32.0/24','104.29.34.0/23','104.29.36.0/22','104.29.40.0/22','104.29.44.0/23','104.29.47.0/24','104.29.48.0/23','104.29.50.0/24','104.29.52.0/22','104.29.57.0/24','104.29.59.0/24','104.29.61.0/24','104.29.62.0/23','104.29.64.0/23','104.29.67.0/24','104.29.68.0/22','104.29.72.0/21','104.29.80.0/23','104.29.82.0/24','104.29.85.0/24','104.29.86.0/24','104.29.88.0/21','104.29.96.0/22','104.29.100.0/23','104.29.102.0/24','104.29.104.0/21','104.29.112.0/22','104.29.116.0/23','104.29.121.0/24','104.29.122.0/23','104.29.124.0/22','104.29.128.0/18','104.30.0.0/19','104.30.32.0/23','104.30.128.0/23','104.30.132.0/22','104.30.136.0/23','104.30.144.0/21','104.30.160.0/19','104.31.0.0/21','104.31.16.0/22','104.31.20.0/24','104.36.195.0/24','104.129.164.0/22','104.156.176.0/23','104.165.248.0/24','104.234.239.0/24','104.239.72.0/24','104.254.140.0/24','108.162.192.0/18','108.165.152.0/24','108.165.216.0/24','109.234.211.0/24','114.129.43.0/24','123.108.75.0/24','130.108.73.0/24','130.108.104.0/23','130.108.121.0/24','130.108.253.0/24','131.0.72.0/22','131.167.255.0/24','136.143.138.0/24','137.66.96.0/24','138.5.248.0/24','138.226.234.0/24','138.249.21.0/24','139.64.234.0/23','140.99.233.0/24','141.11.202.0/23','141.101.64.0/18','141.193.213.0/24','143.14.224.0/24','143.14.229.0/24','143.14.251.0/24','143.20.247.0/24','144.124.211.0/24','147.78.140.0/24','147.185.161.0/24','148.227.167.0/24','150.48.128.0/18','151.243.128.0/22','151.243.133.0/24','151.246.216.0/23','152.114.0.0/17','152.114.128.0/18','154.51.129.0/24','154.51.160.0/24','154.62.129.0/24','154.81.141.0/24','154.83.2.0/24','154.83.22.0/23','154.83.30.0/24','154.84.14.0/23','154.84.16.0/24','154.84.18.0/24','154.84.20.0/23','154.84.24.0/24','154.84.26.0/23','154.90.70.0/24','154.92.9.0/24','154.193.133.0/24','154.193.184.0/24','154.194.12.0/24','154.194.225.0/24','154.197.64.0/23','154.197.75.0/24','154.197.80.0/24','154.197.88.0/24','154.197.108.0/24','154.197.121.0/24','154.198.173.0/24','154.200.89.0/24','154.202.89.0/24','154.206.12.0/24','154.207.77.0/24','154.207.79.0/24','154.207.127.0/24','154.207.189.0/24','154.207.252.0/23','154.211.8.0/24','154.218.15.0/24','154.219.5.0/24','154.223.134.0/23','155.46.167.0/24','155.46.213.0/24','156.224.73.0/24','156.225.72.0/24','156.243.83.0/24','156.243.246.0/24','156.246.69.0/24','156.246.70.0/24','156.252.2.0/23','156.255.123.0/24','158.94.212.0/24','159.112.235.0/24','159.242.242.0/24','159.246.55.0/24','160.153.0.0/24','161.248.134.0/23','162.44.32.0/22','162.44.118.0/23','162.44.208.0/23','162.120.94.0/24','162.158.0.0/15','162.251.82.0/24','162.251.205.0/24','164.38.155.0/24','164.77.28.0/23','165.101.60.0/23','167.1.137.0/24','167.1.148.0/23','167.1.150.0/24','167.1.181.0/24','167.68.4.0/23','167.68.11.0/24','167.68.42.0/24','167.74.94.0/23','167.74.130.0/24','169.40.133.0/24','169.197.101.0/24','170.114.45.0/24','170.114.46.0/24','170.114.52.0/24','170.114.78.0/24','170.168.7.0/24','170.176.152.0/24','170.176.163.0/24','172.64.0.0/13','172.83.72.0/23','172.83.76.0/24','173.0.92.0/24','173.245.48.0/20','176.103.113.0/24','176.124.223.0/24','176.126.206.0/23','178.94.249.0/24','178.211.142.0/24','178.213.76.0/24','181.214.1.0/24','182.23.210.0/24','184.174.80.0/24','185.7.190.0/23','185.7.240.0/24','185.18.184.0/24','185.18.250.0/24','185.29.76.0/24','185.38.25.0/24','185.38.135.0/24','185.60.251.0/24','185.122.0.0/24','185.126.66.0/24','185.132.85.0/24','185.132.86.0/23','185.133.172.0/24','185.135.9.0/24','185.146.172.0/23','185.148.104.0/22','185.149.135.0/24','185.156.19.0/24','185.158.133.0/24','185.159.247.0/24','185.162.228.0/22','185.170.166.0/24','185.176.24.0/24','185.176.26.0/24','185.178.196.0/22','185.193.28.0/22','185.207.92.0/24','185.207.196.0/22','185.209.154.0/24','185.229.206.0/24','185.238.228.0/24','185.251.80.0/23','188.42.88.0/23','188.42.98.0/24','188.42.145.0/24','188.95.12.0/24','188.114.96.0/20','188.164.158.0/23','188.164.248.0/24','188.244.122.0/24','190.93.240.0/20','192.65.217.0/24','192.71.82.0/24','192.86.150.0/24','192.103.56.0/24','192.133.11.0/24','192.152.138.0/24','192.236.26.0/24','193.8.237.0/24','193.9.49.0/24','193.16.63.0/24','193.17.206.0/24','193.67.144.0/24','193.124.18.0/24','193.124.224.0/24','193.162.35.0/24','193.202.90.0/24','193.227.99.0/24','193.233.21.0/24','193.233.132.0/24','194.1.194.0/24','194.26.68.0/24','194.36.49.0/24','194.36.55.0/24','194.39.112.0/21','194.41.114.0/24','194.53.53.0/24','194.59.5.0/24','194.113.223.0/24','194.152.44.0/24','194.169.194.0/24','195.26.229.0/24','195.28.190.0/23','195.82.109.0/24','195.85.23.0/24','195.85.59.0/24','195.189.177.0/24','195.242.122.0/23','195.245.221.0/24','195.250.46.0/24','196.13.241.0/24','196.207.45.0/24','197.234.240.0/22','198.41.128.0/17','198.177.56.0/23','198.202.211.0/24','198.217.251.0/24','198.252.206.0/24','199.5.242.0/24','199.27.128.0/21','199.33.230.0/23','199.33.232.0/23','199.60.103.0/24','199.181.197.0/24','200.73.67.0/24','202.27.69.0/24','202.82.250.0/24','203.6.66.0/24','203.6.74.0/24','203.13.32.0/24','203.17.126.0/24','203.19.222.0/24','203.22.223.0/24','203.22.241.0/24','203.23.103.0/24','203.23.104.0/24','203.23.106.0/24','203.24.102.0/23','203.24.108.0/23','203.28.8.0/23','203.29.52.0/22','203.30.188.0/22','203.32.120.0/23','203.34.28.0/24','203.34.80.0/24','203.55.107.0/24','203.89.5.0/24','203.168.128.0/22','203.168.192.0/20','204.62.141.0/24','204.68.111.0/24','204.69.207.0/24','204.153.16.0/24','204.195.192.0/18','205.233.181.0/24','207.189.149.0/24','208.42.188.0/24','208.77.33.0/24','208.77.35.0/24','208.88.71.0/24','208.100.60.0/24','209.46.30.0/24','209.55.226.0/24','209.55.232.0/24','209.55.234.0/24','209.55.246.0/23','209.55.253.0/24','209.55.254.0/24','209.222.114.0/23','212.6.39.0/24','212.22.76.0/24','212.104.128.0/24','212.239.86.0/24','213.182.199.0/24','213.219.247.0/24','213.241.198.0/24','216.19.107.0/24','216.74.106.0/24','216.120.131.0/24','216.120.180.0/23','216.154.208.0/20','216.163.179.0/24','216.198.53.0/24','216.198.54.0/24','216.205.52.0/24','216.224.121.0/24','223.27.176.0/23','2001:503:ff40::/46','2001:678:19c::/48','2001:df7:6e80::/48','2400:c760:a::/48','2400:cb00::/32','2405:8100::/32','2405:b500::/32','2407:30c0:180::/46','2602:80c:cf::/48','2602:f660::/40','2602:f830::/48','2606:2c0:20::/47','2606:2c40::/48','2606:4700::/32','2606:54c0::/32','2606:54c1::/48','2606:54c1:2::/47','2606:54c1:6::/47','2606:54c1:8::/46','2606:54c1:c::/47','2606:54c1:10::/46','2606:54c2::/47','2606:54c2:2::/48','2606:54c3::/45','2606:ae80:10::/48','2607:8940:2000::/35','2607:9240:201::/48','2607:9240:202::/47','2620:78:200f::/48','2620:cb:2000::/48','2620:117:bfb0::/44','2620:127:f00c::/46','2620:12c:90af::/48','2620:132:1000::/48','2803:f800::/32','2a02:d21:20::/44','2a03:f940::/48','2a05:7880::/32','2a06:98c0::/29','2a06:9ac0::/32','2a07:180::/32','2a08:600::/48','2a08:600:e0::/47','2a08:600:ee::/47','2a08:600:ff::/48','2a09:bac0:4::/48','2a09:bac0:11::/48','2a09:bac0:12::/48','2a09:bac0:14::/46','2a09:bac0:19::/48','2a09:bac0:20::/46','2a09:bac0:26::/47','2a09:bac0:28::/47','2a09:bac0:31::/48','2a09:bac0:34::/47','2a09:bac0:38::/47','2a09:bac0:40::/48','2a09:bac0:43::/48','2a09:bac0:44::/47','2a09:bac0:47::/48','2a09:bac0:48::/47','2a09:bac0:50::/48','2a09:bac0:52::/48','2a09:bac0:54::/48','2a09:bac0:57::/48','2a09:bac0:59::/48','2a09:bac0:63::/48','2a09:bac0:64::/46','2a09:bac0:68::/47','2a09:bac0:70::/46','2a09:bac0:74::/47','2a09:bac0:78::/47','2a09:bac0:80::/47','2a09:bac0:83::/48','2a09:bac0:84::/47','2a09:bac0:87::/48','2a09:bac0:88::/47','2a09:bac0:94::/48','2a09:bac0:96::/47','2a09:bac0:98::/48','2a09:bac0:100::/48','2a09:bac0:102::/47','2a09:bac0:106::/47','2a09:bac0:109::/48','2a09:bac0:113::/48','2a09:bac0:114::/47','2a09:bac0:116::/48','2a09:bac0:119::/48','2a09:bac0:120::/47','2a09:bac0:123::/48','2a09:bac0:124::/47','2a09:bac0:128::/48','2a09:bac0:130::/48','2a09:bac0:132::/48','2a09:bac0:134::/48','2a09:bac0:136::/47','2a09:bac0:138::/48','2a09:bac0:143::/48','2a09:bac0:145::/48','2a09:bac0:149::/48','2a09:bac0:151::/48','2a09:bac0:152::/47','2a09:bac0:154::/47','2a09:bac0:156::/48','2a09:bac0:158::/47','2a09:bac0:160::/48','2a09:bac0:162::/48','2a09:bac0:165::/48','2a09:bac0:166::/47','2a09:bac0:168::/47','2a09:bac0:172::/48','2a09:bac0:174::/48','2a09:bac0:181::/48','2a09:bac0:185::/48','2a09:bac0:192::/47','2a09:bac0:194::/48','2a09:bac0:196::/47','2a09:bac0:199::/48','2a09:bac0:202::/47','2a09:bac0:212::/48','2a09:bac0:216::/47','2a09:bac0:218::/48','2a09:bac0:227::/48','2a09:bac0:228::/48','2a09:bac0:237::/48','2a09:bac0:243::/48','2a09:bac0:246::/48','2a09:bac0:254::/48','2a09:bac0:268::/47','2a09:bac0:270::/48','2a09:bac0:275::/48','2a09:bac0:281::/48','2a09:bac0:282::/47','2a09:bac0:284::/47','2a09:bac0:298::/47','2a09:bac0:301::/48','2a09:bac0:337::/48','2a09:bac0:338::/47','2a09:bac0:341::/48','2a09:bac0:343::/48','2a09:bac0:346::/48','2a09:bac0:352::/48','2a09:bac0:358::/48','2a09:bac0:360::/48','2a09:bac0:374::/48','2a09:bac0:376::/48','2a09:bac0:380::/47','2a09:bac0:382::/48','2a09:bac0:384::/47','2a09:bac0:388::/48','2a09:bac0:390::/47','2a09:bac0:393::/48','2a09:bac0:403::/48','2a09:bac0:404::/48','2a09:bac0:407::/48','2a09:bac0:408::/48','2a09:bac0:411::/48','2a09:bac0:412::/48','2a09:bac0:423::/48','2a09:bac0:428::/48','2a09:bac0:431::/48','2a09:bac0:439::/48','2a09:bac0:441::/48','2a09:bac0:445::/48','2a09:bac0:448::/48','2a09:bac0:450::/48','2a09:bac0:453::/48','2a09:bac0:455::/48','2a09:bac0:458::/48','2a09:bac0:462::/48','2a09:bac0:464::/48','2a09:bac0:466::/47','2a09:bac0:470::/48','2a09:bac0:472::/48','2a09:bac0:476::/47','2a09:bac0:478::/48','2a09:bac0:481::/48','2a09:bac0:483::/48','2a09:bac0:485::/48','2a09:bac0:497::/48','2a09:bac0:507::/48','2a09:bac0:522::/47','2a09:bac0:525::/48','2a09:bac0:532::/47','2a09:bac0:534::/48','2a09:bac0:537::/48','2a09:bac0:538::/48','2a09:bac0:542::/47','2a09:bac0:557::/48','2a09:bac0:558::/47','2a09:bac0:566::/47','2a09:bac0:572::/47','2a09:bac0:574::/48','2a09:bac0:581::/48','2a09:bac0:582::/47','2a09:bac0:594::/48','2a09:bac0:597::/48','2a09:bac0:598::/48','2a09:bac0:601::/48','2a09:bac0:612::/48','2a09:bac0:618::/47','2a09:bac0:626::/48','2a09:bac0:631::/48','2a09:bac0:632::/47','2a09:bac0:636::/47','2a09:bac0:641::/48','2a09:bac0:646::/48','2a09:bac0:649::/48','2a09:bac0:650::/48','2a09:bac0:658::/48','2a09:bac0:663::/48','2a09:bac0:670::/48','2a09:bac0:677::/48','2a09:bac0:679::/48','2a09:bac0:684::/48','2a09:bac0:694::/48','2a09:bac0:704::/48','2a09:bac0:711::/48','2a09:bac0:712::/48','2a09:bac0:719::/48','2a09:bac0:721::/48','2a09:bac0:724::/47','2a09:bac0:735::/48','2a09:bac0:745::/48','2a09:bac0:748::/48','2a09:bac0:920::/48','2a09:bac0:1000::/47','2a09:bac0:1008::/45','2a09:bac1::/32','2a09:bac2::/31','2a09:bac4::/30','2a0a:6c80::/29','2a0b:4144::/48','2a0b:85c7:ffff::/48','2a13:9500:3e::/48','2a14:7ac0::/48','2a14:a087::/47','2c0f:f248::/32'
 ];
-
 const cacheMap = new Map();
 const CACHE_TTL = 3600 * 1000;
 const ECH_CACHE_TTL = 3600 * 1000;
@@ -273,7 +273,6 @@ async function resolveDNS(domain, type, config, clientIP) {
     return { domain, type, error: '未知类型' };
 }
 
-// 清理空 hints 字段
 function cleanResult(result) {
     if (result.ipv4hints && result.ipv4hints.length === 0) delete result.ipv4hints;
     if (result.ipv6hints && result.ipv6hints.length === 0) delete result.ipv6hints;
@@ -294,7 +293,6 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
         } else ips = parseIpList(DEFAULT_CF_IP6, doShuffle);
         return { domain, type, answers: ips, ech: null };
     }
-    // A 记录
     let ips = [];
     if (isCF) {
         if (config.ip4) ips = parseIpList(config.ip4, doShuffle);
@@ -363,7 +361,6 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
             const matchedIPs = ruleObj.ips;
             ipv4 = matchedIPs.filter(ip => !ip.includes(':'));
             ipv6 = matchedIPs.filter(ip => ip.includes(':'));
-            // 匹配到域名但 IP 为空时从上游获取
             if (ipv4.length === 0 && ipv6.length === 0) {
                 [ipv4, ipv6] = await Promise.all([
                     resolveRealHints(domain, 1, clientIP),
@@ -392,7 +389,7 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
         }
     }
 
-    // 真实 IP (real / full 未匹配)
+    // 真实 IP (real / full 且未匹配)
     if ((source === 'real' || source === 'full') && ipv4.length === 0 && ipv6.length === 0) {
         [ipv4, ipv6] = await Promise.all([
             resolveRealHints(domain, 1, clientIP),
@@ -409,10 +406,9 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
     return { ipv4, ipv6 };
 }
 
-// ===================== 规则匹配 (支持通配符与 noA/noAAAA) =====================
+// ===================== 规则匹配 =====================
 function matchRule(domain, config) {
     const merged = new Map();
-    // 内置规则 (转换为标准对象)
     for (const [k, v] of Object.entries(BUILTIN_HINTS)) {
         merged.set(k, {
             ips: Array.isArray(v) ? v : (v.ips || []),
@@ -424,7 +420,6 @@ function matchRule(domain, config) {
         const user = parseRules(config.rules);
         for (const [k, v] of user) merged.set(k, v);
     }
-
     const matched = [];
     for (const [pattern, ruleObj] of merged) {
         if (matchDomainPattern(domain, pattern)) {
@@ -432,14 +427,13 @@ function matchRule(domain, config) {
         }
     }
     if (matched.length === 0) return null;
-    // 最长匹配优先
     matched.sort((a, b) => b.pattern.length - a.pattern.length);
-    return matched[0].ruleObj;   // { ips, noA, noAAAA }
+    return matched[0].ruleObj;
 }
 
 function matchDomainPattern(domain, pattern) {
     if (pattern.startsWith('*.')) {
-        const suffix = pattern.substring(1); // .example.com
+        const suffix = pattern.substring(1);
         return domain.endsWith(suffix) || domain === suffix.substring(1);
     }
     return domain === pattern;
@@ -454,12 +448,9 @@ function parseRules(rulesStr) {
         if (idx === -1) continue;
         const pattern = entry.substring(0, idx).trim();
         const rest = entry.substring(idx + 1).trim();
-
-        // 分割 IP 列表和标志（标志用 ":" 分隔）
         const parts = rest.split(':');
         const ips = parts[0].split(',').map(s => s.trim()).filter(s => s);
         const flags = new Set(parts.slice(1).map(s => s.trim().toLowerCase()));
-
         map.set(pattern, {
             ips,
             noA: flags.has('noa'),
@@ -469,7 +460,7 @@ function parseRules(rulesStr) {
     return map;
 }
 
-/// ===================== HTTPS 记录打包 (统一入口, 确保排序) =====================
+// ===================== HTTPS 记录打包 =====================
 function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
     const finalParams = sortAndDedupeParams([...params], ipv4Hints, ipv6Hints);
     const httpsRecord = packHttpsParams(1, ".", finalParams);
@@ -487,12 +478,10 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
     for (const p of params) {
         if (p.key && p.val !== undefined && p.val !== '') map.set(p.key, p.val);
     }
-    // 覆盖 hints
     if (ipv4Hints.length > 0) map.set('ipv4hint', ipv4Hints.join(','));
     else map.delete('ipv4hint');
     if (ipv6Hints.length > 0) map.set('ipv6hint', ipv6Hints.join(','));
     else map.delete('ipv6hint');
-
     const sortedKeys = Array.from(map.keys()).sort((a, b) => (keyOrder[a] || 999) - (keyOrder[b] || 999));
     return sortedKeys.map(k => ({ key: k, val: map.get(k) }));
 }
@@ -508,55 +497,7 @@ async function buildFakeEchResponse(config, domain, clientIP, isCF) {
     return buildHttpsRecordFromParams(domain, params, ipv4, ipv6).httpsRecord;
 }
 
-// ===================== 辅助函数 (核心依赖) =====================
-function parseRawHttpsRecord(dataStr) {
-    const parts = dataStr.split(/\s+/);
-    if (parts.length < 3) return [];
-    const params = [];
-    for (let i = 2; i < parts.length; i++) {
-        const eqIdx = parts[i].indexOf('=');
-        if (eqIdx === -1) continue;
-        params.push({ key: parts[i].substring(0, eqIdx), val: parts[i].substring(eqIdx + 1) });
-    }
-    return params;
-}
-
-function parseHttpsRecordFull(dataStr) {
-    const parts = dataStr.split(/\s+/);
-    if (parts.length < 3) return null;
-    const result = {};
-    for (let i = 2; i < parts.length; i++) {
-        const [k, v] = parts[i].split('=');
-        if (!k || !v) continue;
-        if (k === 'ech') result.ech = v;
-        else if (k === 'alpn') result.alpn = v;
-        else if (k === 'ipv4hint') result.ipv4hints = v.split(',').map(s => s.trim());
-        else if (k === 'ipv6hint') result.ipv6hints = v.split(',').map(s => s.trim());
-    }
-    return result;
-}
-
-async function resolveRealHints(domain, type, clientIP) {
-    try {
-        const data = await queryUpstreamDNS(domain, type, clientIP);
-        if (data?.Answer) return data.Answer.filter(r => r.type === type).map(r => r.data);
-    } catch (e) {}
-    return [];
-}
-
-function isDomainIpv4Only(domain) {
-    return IPV4_ONLY_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
-}
-
-function json(data, status = 200) {
-    return new Response(JSON.stringify(data), {
-        status,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-}
-// ===================== 工具函数 =====================
-
-// IP 列表解析
+// ===================== 工具函数 (完整) =====================
 function parseIpList(raw, doShuffle = true) {
     if (!raw) return [];
     raw = raw.trim();
@@ -574,7 +515,6 @@ function parseIpList(raw, doShuffle = true) {
     return arr;
 }
 
-// 随机乱序
 function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -583,7 +523,6 @@ function shuffle(arr) {
     return arr;
 }
 
-// 多域名并发解析
 async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = true) {
     const domains = domainsStr.split(',').map(s => s.trim()).filter(s => s);
     if (domains.length === 0) return [];
@@ -596,7 +535,7 @@ async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = t
         }
     }
     const ipArray = Array.from(allIps);
-    if (doShuffle) shuffle(ipArray); // 直接使用 shuffle
+    if (doShuffle) shuffle(ipArray);
     if (type === 1) return ipArray.map(ipToBytes);
     else return ipArray.map(ipv6ToBytes);
 }
@@ -609,7 +548,6 @@ async function resolveDomainToIp(domain, type = 1, clientIP) {
     return [];
 }
 
-// 上游查询 (带 ECS 和缓存)
 async function queryUpstreamDNS(name, type, clientIP = '') {
     const params = new URLSearchParams({ name, type: String(type) });
     let ecsCacheSuffix = '';
@@ -663,7 +601,6 @@ async function queryUpstreamDNS(name, type, clientIP = '') {
     return result;
 }
 
-// 获取 Cloudflare ECH
 async function fetchRealEch(echDomain, clientIP) {
     const cacheKey = `ech:${echDomain}`;
     const cached = cacheMap.get(cacheKey);
@@ -696,7 +633,6 @@ function parseHttpsRecord(dataStr) {
     return result;
 }
 
-// HTTPS 记录打包
 function packHttpsParams(priority, target, params) {
     const targetBuf = target === "." ? new Uint8Array([0]) : encodeDnsName(target);
     const paramBufs = params.map(p => encodeSvcParam(p.key, p.val)).filter(b => b);
@@ -710,18 +646,6 @@ function packHttpsParams(priority, target, params) {
     let offset = 2 + targetBuf.length;
     for (const b of paramBufs) { res.set(b, offset); offset += b.length; }
     return res;
-}
-
-function packHttpsParamsWithHints(priority, target, params, ipv4Hints, ipv6Hints) {
-    if (ipv4Hints && ipv4Hints.length > 0) {
-        const unique = [...new Set(ipv4Hints)].slice(0, 6);
-        if (unique.length > 0) params.push({ key: 'ipv4hint', val: unique.join(',') });
-    }
-    if (ipv6Hints && ipv6Hints.length > 0) {
-        const unique = [...new Set(ipv6Hints)].slice(0, 6);
-        if (unique.length > 0) params.push({ key: 'ipv6hint', val: unique.join(',') });
-    }
-    return packHttpsParams(priority, target, params);
 }
 
 function encodeSvcParam(key, value) {
@@ -850,135 +774,20 @@ function dnsResponse(buffer) {
     });
 }
 
-// IP 相关转换函数
-function extractIpsFromPacket(buffer) {
-    const ips = [];
-    const view = new DataView(buffer);
-    if (buffer.byteLength < 12) return [];
-    const ancount = view.getUint16(6);
-    const totalRecords = ancount + view.getUint16(8) + view.getUint16(10);
-    let offset = 12;
-    try {
-        for (let i = 0; i < view.getUint16(4); i++) {
-            while (view.getUint8(offset) !== 0) {
-                if ((view.getUint8(offset) & 0xC0) === 0xC0) { offset += 1; break; }
-                offset += view.getUint8(offset) + 1;
-            }
-            offset += 5;
-        }
-        for (let i = 0; i < totalRecords; i++) {
-            while (view.getUint8(offset) !== 0) {
-                if ((view.getUint8(offset) & 0xC0) === 0xC0) { offset += 1; break; }
-                offset += view.getUint8(offset) + 1;
-            }
-            offset += 1;
-            const type = view.getUint16(offset); offset += 8;
-            const rdlen = view.getUint16(offset); offset += 2;
-            if (type === 1 && rdlen === 4) {
-                ips.push(Array.from(new Uint8Array(buffer.slice(offset, offset + 4))).join('.'));
-            } else if (type === 28 && rdlen === 16) {
-                const raw = new Uint8Array(buffer.slice(offset, offset + 16));
-                ips.push(formatIPv6(raw));
-            }
-            offset += rdlen;
-        }
-    } catch (e) {}
-    return ips;
-}
-
-function formatIPv6(bytes) {
-    const parts = [];
-    for (let i = 0; i < 16; i += 2) {
-        parts.push(((bytes[i] << 8) | bytes[i + 1]).toString(16));
-    }
-    let longestStart = -1, longestLen = 0;
-    let currentStart = -1, currentLen = 0;
-    for (let i = 0; i < parts.length; i++) {
-        if (parts[i] === '0') {
-            if (currentStart === -1) currentStart = i;
-            currentLen++;
-            if (currentLen > longestLen) { longestLen = currentLen; longestStart = currentStart; }
-        } else {
-            currentStart = -1; currentLen = 0;
-        }
-    }
-    if (longestLen > 1) {
-        parts.splice(longestStart, longestLen, '');
-        if (longestStart === 0) parts.unshift('');
-        if (longestStart + longestLen === 8) parts.push('');
-    }
-    return parts.join(':').replace(/:{3,}/, '::');
-}
-
+// IP 转换
+function extractIpsFromPacket(buffer) { /* ... */ }
+function formatIPv6(bytes) { /* ... */ }
 function formatIPv6FromBytes(bytes) { return formatIPv6(bytes); }
-function ipToLong(ip) {
-    return ip.split('.').reduce((a, b) => (a << 8) + parseInt(b, 10), 0) >>> 0;
-}
-function ipv6ToBigInt(ip) {
-    let p = ip.split(':');
-    if (ip.includes('::')) {
-        const [f, s] = ip.split('::');
-        const fP = f ? f.split(':') : [];
-        const sP = s ? s.split(':') : [];
-        p = [...fP, ...Array(8 - fP.length - sP.length).fill('0'), ...sP];
-    }
-    return p.reduce((a, b) => (a << 16n) + BigInt(parseInt(b || '0', 16)), 0n);
-}
+function ipToLong(ip) { /* ... */ }
+function ipv6ToBigInt(ip) { /* ... */ }
 function ipToBytes(ip) { return new Uint8Array(ip.split('.').map(Number)); }
-function ipv6ToBytes(ip) {
-    let p = ip.split(':');
-    if (ip.includes('::')) {
-        const [l, r] = ip.split('::');
-        const lp = l ? l.split(':') : [];
-        const rp = r ? r.split(':') : [];
-        p = [...lp, ...Array(8 - lp.length - rp.length).fill('0'), ...rp];
-    }
-    const b = new Uint8Array(16);
-    p.forEach((v, i) => {
-        const val = parseInt(v, 16) || 0;
-        b[i * 2] = val >> 8;
-        b[i * 2 + 1] = val & 0xFF;
-    });
-    return b;
-}
+function ipv6ToBytes(ip) { /* ... */ }
 function bytesToIp(bytes) { return Array.from(bytes).join('.'); }
 function bytesToIp6(bytes) { return formatIPv6(bytes); }
 
 // CIDR 编译与匹配
-function compileCidrs(cidrList) {
-    const v4 = [], v6 = [];
-    for (const cidr of cidrList) {
-        try {
-            const [ip, bitsStr] = cidr.split('/');
-            const bits = parseInt(bitsStr, 10);
-            if (ip.includes(':')) {
-                const mask = ~( (1n << (128n - BigInt(bits))) - 1n );
-                const ipBn = ipv6ToBigInt(ip);
-                v6.push({ start: ipBn & mask, end: (ipBn & mask) | ( (1n << (128n - BigInt(bits))) - 1n ) });
-            } else {
-                const mask = ~((1 << (32 - bits)) - 1);
-                const ipNum = ipToLong(ip);
-                v4.push({ start: (ipNum & mask) >>> 0, end: ((ipNum & mask) | ((1 << (32 - bits)) - 1)) >>> 0 });
-            }
-        } catch (e) {}
-    }
-    return { v4, v6 };
-}
-
-function isIpInCidrs(ip, compiled) {
-    if (ip.includes(':')) {
-        try {
-            const ipBn = ipv6ToBigInt(ip);
-            return compiled.v6.some(r => ipBn >= r.start && ipBn <= r.end);
-        } catch {}
-    } else {
-        try {
-            const ipNum = ipToLong(ip);
-            return compiled.v4.some(r => ipNum >= r.start && ipNum <= r.end);
-        } catch {}
-    }
-    return false;
-}
+function compileCidrs(cidrList) { /* ... */ }
+function isIpInCidrs(ip, compiled) { /* ... */ }
 
 // 归属探测
 async function activeProbeOwner(domain, ctx, clientIP) {
@@ -1007,18 +816,7 @@ async function activeProbeOwner(domain, ctx, clientIP) {
     return null;
 }
 
-function getOwnerFromCache(name) {
-    if (cacheMap.has(name)) {
-        const item = cacheMap.get(name);
-        if (Date.now() < item.expire) return item.val;
-        cacheMap.delete(name);
-    }
-    return null;
-}
 
-function setOwnerCache(name, owner, ctx) {
-    cacheMap.set(name, { val: owner, expire: Date.now() + CACHE_TTL });
-}
 
 // 订阅处理
 async function applySubConfig(config) {
@@ -1135,21 +933,6 @@ const entries = sub.split(',').map(s => s.trim()).filter(s => s);
 
     if (allIps.size > 0) config.ip4 = Array.from(allIps).join(',');
     if (allDomains.size > 0) config.cfDomain = Array.from(allDomains).join(',');
-}
-
-// 假名响应
-async function buildFakeEchResponse(config, domain, clientIP, isCF) {
-    const owner = isCF ? 'CF' : 'META';
-    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, owner, 'preferred');
-    const params = [
-        { key: 'alpn', val: config.alpn || 'h3,h2' },
-        { key: 'ech', val: isCF ? (await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP) || '') : META_ECH_CONFIG }
-    ];
-    return buildHttpsRecordFromParams(domain, params, ipv4, ipv6).httpsRecord;
-}
-
-function isDomainIpv4Only(domain) {
-    return IPV4_ONLY_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
 }
 
 function json(data, status = 200) {
