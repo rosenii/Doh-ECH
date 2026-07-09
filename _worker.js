@@ -1,7 +1,16 @@
 /**
- * DoH-ECH 最终版 (enhance v2)
- * 新增：enhance=rule/full 模式，内置常用站点 IP，ALPN 默认 h3,h2，统一 HTTPS 构建
- * 保留：ECS, best, sub, exclude, area, shuffle, clientIp, force
+ * DOH-ECH 
+ * - 双上游竞速 + Edge 缓存
+ *- CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
+ * - HTTPS hints 复用归属探测 IP
+ * - best参数 控制全局跟随优选，所有CF站点均使用配置的优选结果 默认false
+ * - clientIp参数 ECS支持，默认自动获取
+ * - cf参数 解析优选的域名记录返回
+ * - sub参数  多订阅缓存 
+ * - exclude参数 过滤排除不合适的优选ip/domain
+ * - shuffle 参数 返回记录随机乱序开关 默认false
+ * - area 参数   返回订阅列表指定区域的ip记录
+ * 新增：enhance=rule/full/off 模式，内置常用站点 IP，ALPN 默认 h3,h2，统一 HTTPS 构建
  */
 
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -183,8 +192,9 @@ async function handleApiQuery(url, clientIP) {
     await applySubConfig(config);
 
     try {
-        const result = await resolveDNS(domain, type, config, config.clientIp);
-        return json(result);
+const result = await resolveDNS(domain, type, config, config.clientIp);
+if (result.httpsRecord) delete result.httpsRecord; // JSON 不应包含二进制数据
+return json(result);
     } catch (e) {
         return json({ error: e.message }, 500);
     }
@@ -230,17 +240,22 @@ async function resolveDNS(domain, type, config, clientIP) {
         }
     }
 
-    if (type === 'HTTPS') {
-        const httpsRecord = await buildHttpsRecord(domain, config, clientIP, owner);
-        const result = { domain, type, answers: [] };
-        result.ech = null;
-        if (httpsRecord) {
-            result.httpsRecord = httpsRecord;
-            const decoded = decodeHttpsRecord(httpsRecord);
-            if (decoded && decoded.ech) result.ech = decoded.ech;
-        }
-        return result;
+if (type === 'HTTPS') {
+    const httpsRecord = await buildHttpsRecord(domain, config, clientIP, owner);
+    const result = { domain, type, answers: [] };
+    result.ech = null;
+    if (owner === 'CF' || owner === 'META') {
+        result.ech = owner === 'CF' 
+            ? await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP) 
+            : META_ECH_CONFIG;
     }
+    // 提取 hints 供 JSON 展示
+    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, owner, config.enhance || 'off');
+    if (ipv4.length) result.ipv4hints = ipv4;
+    if (ipv6.length) result.ipv6hints = ipv6;
+    result.httpsRecord = httpsRecord; // 仅用于 DoH 二进制响应
+    return result;
+}
 
     return { domain, type, error: '未知类型' };
 }
@@ -1354,7 +1369,7 @@ function getHtml() {
 
         <div class="row" style="align-items: flex-end;">
             <div>
-                <label for="mode">优选模式</label>
+                <label for="mode">模式</label>
                 <select id="mode" onchange="onModeChange()" style="margin-bottom:0">
                     <option value="">无 (默认解析)</option>
                     <option value="cf">🔶 Cloudflare 优选</option>
@@ -1370,6 +1385,7 @@ function getHtml() {
             </div>
         </div>
 
+        <!-- Cloudflare 高级参数 -->
         <div id="cfParams" class="advanced-section">
             <div class="param-grid">
                 <div>
@@ -1385,7 +1401,7 @@ function getHtml() {
                     <input type="text" id="cfDomain" placeholder="example.com, example2.com">
                 </div>
                 <div>
-                    <label>ECH 来源域名</label>
+                    <label>ECH 来源域名 <span class="badge badge-cf">ech</span></label>
                     <input type="text" id="echDomain" placeholder="cloudflare-ech.com">
                 </div>
                 <div>
@@ -1426,6 +1442,7 @@ function getHtml() {
             </div>
         </div>
 
+        <!-- Meta 高级参数 -->
         <div id="metaParams" class="advanced-section">
             <div class="param-grid">
                 <div>
@@ -1439,6 +1456,22 @@ function getHtml() {
                 <div>
                     <label>解析域名获取 IP <span class="badge badge-meta">meta</span></label>
                     <input type="text" id="metaDomain" placeholder="meta-better.example.com">
+                </div>
+                <div>
+                    <label>HTTPS增强 <span class="badge badge-meta">enhance</span></label>
+                    <select id="metaEnhance">
+                        <option value="off">关闭</option>
+                        <option value="rule">规则模式</option>
+                        <option value="full">全局模式</option>
+                    </select>
+                </div>
+                <div>
+                    <label>自定义规则 <span class="badge badge-meta">rules</span></label>
+                    <input type="text" id="metaRules" placeholder="*.reddit.com:ip1,ip2;google.com:ip3">
+                </div>
+                <div>
+                    <label>ALPN 列表 <span class="badge badge-meta">alpn</span></label>
+                    <input type="text" id="metaAlpn" placeholder="h3,h2">
                 </div>
             </div>
         </div>
@@ -1461,12 +1494,12 @@ function getHtml() {
         </div>
         <div id="result" class="result-box" style="display: none;"></div>
         <div class="footer">
-            <span>Total-ECH · Cloudflare Pages · </span>
+            <span>DoH-ECH · Cloudflare Pages · </span>
             <a href="https://github.com/rosenii" target="_blank" rel="noopener noreferrer">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                     <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                 </svg>
-                rosenii
+                GitHub
             </a>
         </div>
     </div>
@@ -1537,9 +1570,15 @@ function getHtml() {
                 const metaIp4 = document.getElementById('metaIp4').value.trim();
                 const metaIp6 = document.getElementById('metaIp6').value.trim();
                 const metaDomain = document.getElementById('metaDomain').value.trim();
+                const metaEnhance = document.getElementById('metaEnhance').value;
+                const metaRules = document.getElementById('metaRules').value.trim();
+                const metaAlpn = document.getElementById('metaAlpn').value.trim();
                 if (metaIp4) params.set('metaIp4', metaIp4);
                 if (metaIp6) params.set('metaIp6', metaIp6);
                 if (metaDomain) params.set('meta', metaDomain);
+                if (metaEnhance !== 'off') params.set('enhance', metaEnhance);
+                if (metaRules) params.set('rules', metaRules);
+                if (metaAlpn) params.set('alpn', metaAlpn);
             }
             const base = window.location.origin + '/ech';
             const qs = params.toString();
@@ -1600,9 +1639,15 @@ function getHtml() {
                 const metaIp4 = document.getElementById('metaIp4').value.trim();
                 const metaIp6 = document.getElementById('metaIp6').value.trim();
                 const metaDomain = document.getElementById('metaDomain').value.trim();
+                const metaEnhance = document.getElementById('metaEnhance').value;
+                const metaRules = document.getElementById('metaRules').value.trim();
+                const metaAlpn = document.getElementById('metaAlpn').value.trim();
                 if (metaIp4) params.set('metaIp4', metaIp4);
                 if (metaIp6) params.set('metaIp6', metaIp6);
                 if (metaDomain) params.set('meta', metaDomain);
+                if (metaEnhance !== 'off') params.set('enhance', metaEnhance);
+                if (metaRules) params.set('rules', metaRules);
+                if (metaAlpn) params.set('alpn', metaAlpn);
             }
             const clientIp = document.getElementById('clientIp').value.trim();
             if (clientIp) params.set('clientIp', clientIp);
@@ -1630,7 +1675,6 @@ function getHtml() {
                 btnText.textContent = '🔍 开始查询';
             }
         }
-
         updateBestLabel();
     </script>
 </body>
