@@ -17,6 +17,7 @@
 
 ### 2. 使用方法
 - **前端网页测试查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
+
 - **DOH地址(完整参数示例)**：  
   ```
    "https://your-domain.pages.dev/ech?sub=ip-https://bestcf.pages.dev/gslege/Cfxyz.txt&best=true&shuffle=true&area=hk,jp,sg,us&exclude=bestcf.pages.dev&clientIp=1.2.4.8&cf=ip.sb,cloudflare-ech.com&ip4=162.159.39.22&ip6=2606:4700:839f:4fd6:ee45:836d:51a4:87b6"
@@ -151,18 +152,3 @@ curl -X POST "https://your-domain.pages.dev/ech?ip4=1.2.3.4" \
   --data-binary @dns-query.bin \
   -H "Content-Type: application/dns-message"
 ```
-
-### 特殊查询
-
-```bash
-# 获取 Cloudflare ECH
-curl "https://your-domain.pages.dev/api/query?domain=cf.ech&type=HTTPS"
-
-# 获取 Meta ECH
-curl "https://your-domain.pages.dev/api/query?domain=fb.ech&type=HTTPS"
-```
-
-## 📝 多 IP 格式
-
-- 逗号分隔：`ip4=1.2.3.4,5.6.7.8`
-- JSON 数组（仅请求头）：`X-Ip4: ["1.2.3.4","5.6.7.8"]`
