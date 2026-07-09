@@ -461,13 +461,26 @@ function parseRules(rulesStr) {
     if (!rulesStr) return map;
     const entries = rulesStr.split(';');
     for (const entry of entries) {
-        const idx = entry.indexOf(':');
-        if (idx === -1) continue;
-        const pattern = entry.substring(0, idx).trim();
-        const rest = entry.substring(idx + 1).trim();
-        const parts = rest.split(':');
-        const ips = parts[0].split(',').map(s => s.trim()).filter(s => s);
-        const flags = new Set(parts.slice(1).map(s => s.trim().toLowerCase()));
+        const colonIdx = entry.indexOf(':');
+        if (colonIdx === -1) continue;
+        const pattern = entry.substring(0, colonIdx).trim();
+        const rest = entry.substring(colonIdx + 1).trim();
+        // 查找第一个连字符，分离 IP 列表和标志
+        const dashIdx = rest.indexOf('-');
+        let ips = [];
+        let flags = new Set();
+        if (dashIdx === -1) {
+            ips = rest.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+            const ipPart = rest.substring(0, dashIdx).trim();
+            const flagPart = rest.substring(dashIdx + 1).trim();
+            if (ipPart) ips = ipPart.split(',').map(s => s.trim()).filter(s => s);
+            if (flagPart) {
+                flagPart.split('-').map(s => s.trim().toLowerCase()).forEach(f => {
+                    if (f === 'noa' || f === 'noaaaa') flags.add(f);
+                });
+            }
+        }
         map.set(pattern, {
             ips,
             noA: flags.has('noa'),
@@ -1669,7 +1682,7 @@ function getHtml() {
                 </div>
                 <div>
                     <label>规则 <span class="badge badge-enhance">rules</span></label>
-                    <input type="text" id="rules" placeholder="*.reddit.com:ip1,ip2;google.com:ip3">
+                    <input type="text" id="rules" placeholder="*.reddit.com:ip1,ip2-noA-noAAAA">
                 </div>
             </div>
         </div>
