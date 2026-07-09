@@ -278,7 +278,16 @@ function cleanResult(result) {
     if (result.ipv6hints && result.ipv6hints.length === 0) delete result.ipv6hints;
     return result;
 }
-
+// =====================从上游 A/AAAA 记录获取真实 IP hints=====================
+async function resolveRealHints(domain, type, clientIP) {
+    try {
+        const data = await queryUpstreamDNS(domain, type, clientIP);
+        if (data && data.Answer) {
+            return data.Answer.filter(r => r.type === type).map(r => r.data);
+        }
+    } catch (e) {}
+    return [];
+}
 // ===================== 静态域名 A/AAAA 处理 =====================
 async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) {
     const doShuffle = config.shuffle !== 'false';
