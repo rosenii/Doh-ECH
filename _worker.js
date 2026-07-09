@@ -38,8 +38,8 @@ const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/Kr
 const BUILTIN_HINTS = {
     "reddit.com": ["151.101.1.140", "151.101.65.140"],
     "*.reddit.com": ["151.101.1.140", "151.101.65.140"],
-    "*.google.com": ["173.194.43.188","2001:4860:4827:7700::"],
-    "*.googlevideo.com": ["2001:4860:4827:7700::"]
+    "*.google.com": ["22001:4860:4827:7700:9876:5432:10fe:dcba"],
+    "*.googlevideo.com": ["2001:4860:4827:7700:9876:5432:10fe:dcba"]
 };
 
 const RAW_META_CIDRS = [
