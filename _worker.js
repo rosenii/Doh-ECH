@@ -336,12 +336,20 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
         const data = await queryUpstreamDNS(domain, 65, clientIP);
         if (data?.Answer) {
             const rec = data.Answer.find(r => r.type === 65);
-            if (rec) upstreamParams = parseRawHttpsRecord(rec.data);
+            if (rec) {
+                const parsed = parseRawHttpsRecord(rec.data);
+                if (parsed) upstreamParams = parsed;
+            }
         }
     } catch (e) {}
 
     const paramMap = new Map();
-    for (const p of upstreamParams) paramMap.set(p.key, p.val);
+    // 确保 upstreamParams 是数组，避免 for...of 报错
+    if (Array.isArray(upstreamParams)) {
+        for (const p of upstreamParams) {
+            if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
+        }
+    }
     paramMap.set('alpn', alpn);
     if (ipv4.length) paramMap.set('ipv4hint', ipv4.join(','));
     if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
@@ -349,7 +357,6 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
     const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
     return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
 }
-
 // ===================== 统一 IP hints 收集 =====================
 async function collectIpHints(domain, config, clientIP, owner, source) {
     let ipv4 = [], ipv6 = [];
