@@ -336,54 +336,83 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
  * @param source - 'preferred' | 'real' | 'rule' | 'full'
  */
 async function collectIpHints(domain, config, clientIP, owner, source) {
-    const doShuffle = config.shuffle !== 'false';
+    let ipv4 = [];
+    let ipv6 = [];
 
     // ----- 规则匹配（rule/full 下优先） -----
     if (source === 'rule' || source === 'full') {
         const matched = matchRule(domain, config);
         if (matched.length > 0) {
-            const v4 = matched.filter(ip => !ip.includes(':'));
-            const v6 = matched.filter(ip => ip.includes(':'));
-            return {
-                ipv4: [...new Set(v4)].slice(0, 6),
-                ipv6: [...new Set(v6)].slice(0, 6)
-            };
+            ipv4 = matched.filter(ip => !ip.includes(':'));
+            ipv6 = matched.filter(ip => ip.includes(':'));
         }
     }
 
     // ----- 优选 IP（preferred） -----
     if (source === 'preferred') {
         if (owner === 'CF') {
-            const v4 = config.ip4 ? parseIpList(config.ip4, doShuffle)
-                : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle)).map(bytesToIp)
-                : parseIpList(DEFAULT_CF_IP, doShuffle);   // 修复：统一使用 parseIpList
-            const v6 = !isDomainIpv4Only(domain)
-                ? (config.ip6 ? parseIpList(config.ip6, doShuffle)
-                    : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle)).map(formatIPv6FromBytes)
-                    : parseIpList(DEFAULT_CF_IP6, doShuffle))
+            ipv4 = config.ip4 ? parseIpList(config.ip4, false)                // 先不洗牌，最后统一洗
+                : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, false)).map(bytesToIp)
+                : parseIpList(DEFAULT_CF_IP, false);
+            ipv6 = !isDomainIpv4Only(domain)
+                ? (config.ip6 ? parseIpList(config.ip6, false)
+                    : config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, false)).map(formatIPv6FromBytes)
+                    : parseIpList(DEFAULT_CF_IP6, false))
                 : [];
-            return { ipv4: v4, ipv6: v6 };
         } else { // META
-            const v4 = config.metaIp4 ? parseIpList(config.metaIp4, doShuffle)
-                : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle)).map(bytesToIp)
-                : parseIpList(DEFAULT_META_IP, doShuffle); // 修复：统一使用 parseIpList
-            const v6 = config.metaIp6 ? parseIpList(config.metaIp6, doShuffle)
-                : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 28, clientIP, doShuffle)).map(formatIPv6FromBytes)
+            ipv4 = config.metaIp4 ? parseIpList(config.metaIp4, false)
+                : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, false)).map(bytesToIp)
+                : parseIpList(DEFAULT_META_IP, false);
+            ipv6 = config.metaIp6 ? parseIpList(config.metaIp6, false)
+                : config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 28, clientIP, false)).map(formatIPv6FromBytes)
                 : [];
-            return { ipv4: v4, ipv6: v6 };
         }
     }
 
     // ----- 真实 IP（real / full） -----
     if (source === 'real' || source === 'full') {
-        const [v4, v6] = await Promise.all([
-            resolveRealHints(domain, 1, clientIP),
-            resolveRealHints(domain, 28, clientIP)
-        ]);
-        return { ipv4: v4, ipv6: v6 };
+        // 如果 full 模式下已经有规则匹配，就不再从上游获取（保留规则结果）
+        if (ipv4.length === 0 && ipv6.length === 0) {
+            [ipv4, ipv6] = await Promise.all([
+                resolveRealHints(domain, 1, clientIP),
+                resolveRealHints(domain, 28, clientIP)
+            ]);
+        }
     }
 
-    return { ipv4: [], ipv6: [] };
+    // 去重、限制数量
+    ipv4 = [...new Set(ipv4)].slice(0, 6);
+    ipv6 = [...new Set(ipv6)].slice(0, 6);
+
+    // ---------- 统一洗牌（如果配置要求） ----------
+    if (config.shuffle !== 'false') {
+        ipv4 = shuffle(ipv4);
+        ipv6 = shuffle(ipv6);
+    }
+
+    return { ipv4, ipv6 };
+}
+
+/**
+ * 从上游 A/AAAA 记录获取真实 IP hints
+ */
+async function resolveRealHints(domain, type, clientIP) {
+    try {
+        const data = await queryUpstreamDNS(domain, type, clientIP);
+        if (data && data.Answer) {
+            return data.Answer.filter(r => r.type === type).map(r => r.data);
+        }
+    } catch (e) {}
+    return [];
+}
+
+// 确保 shuffle 函数存在
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
 }
 /**
  * 统一的 HTTPS 记录构建与结果封装
