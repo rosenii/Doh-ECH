@@ -254,10 +254,10 @@ async function resolveDNS(domain, type, config, clientIP) {
 
     // HTTPS 处理
     if (type === 'HTTPS') {
-        // 静态域名（含 best 提升）或探测到的 CF/Meta 域名都使用静态 HTTPS 构建
         if (owner === 'CF' || owner === 'META') {
-            return await buildStaticHttpsRecord(domain, config, clientIP, owner === 'CF', owner === 'META');
-        }
+        const isStaticList = origStaticCF || origStaticMeta;
+        return await buildStaticHttpsRecord(domain, config, clientIP, owner === 'CF', owner === 'META', isStaticList);
+            }
         // 增强模式（仅对非 CF/Meta 域名生效）
         if (config.enhance && config.enhance !== 'off') {
             return await buildEnhancedHttpsRecord(domain, config, clientIP, owner);
@@ -313,42 +313,24 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
 }
 
 // 静态域名的 HTTPS 记录构建（不受增强模式影响）
-async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta) {
+async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, isStaticList) {
     const alpn = config.alpn || 'h3,h2';
-    let ipv4Hints = [], ipv6Hints = [], ech = null;
-
+    const best = config.best === 'true';
+    // 静态列表域名 → 始终用优选 hints；CIDR 域名 → 根据 best 决定
+    const usePreferred = isStaticList || best;
+    const { ipv4, ipv6 } = await collectIpHints(
+        domain, config, clientIP,
+        isCF ? 'CF' : 'META',
+        usePreferred ? 'static' : 'full'   // best=false 时使用 'full' 从上游获取真实 IP
+    );
+    const params = [{ key: 'alpn', val: alpn }];
     if (isCF) {
-        if (config.ip4) ipv4Hints = parseIpList(config.ip4, config.shuffle !== 'false');
-        else if (config.cfDomain) {
-            const resolved = await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, config.shuffle !== 'false');
-            if (resolved.length > 0) ipv4Hints = resolved.map(bytesToIp);
-        } else ipv4Hints = [DEFAULT_CF_IP];
-        if (!isDomainIpv4Only(domain)) {
-            if (config.ip6) ipv6Hints = parseIpList(config.ip6, config.shuffle !== 'false');
-            else if (config.cfDomain) {
-                const resolved = await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, config.shuffle !== 'false');
-                if (resolved.length > 0) ipv6Hints = resolved.map(formatIPv6FromBytes);
-            } else ipv6Hints = parseIpList(DEFAULT_CF_IP6, config.shuffle !== 'false');
-        }
-        ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
-    } else { // Meta
-        if (config.metaIp4) ipv4Hints = parseIpList(config.metaIp4, config.shuffle !== 'false');
-        else ipv4Hints = [DEFAULT_META_IP];
-        if (config.metaIp6) ipv6Hints = parseIpList(config.metaIp6, config.shuffle !== 'false');
-        ech = META_ECH_CONFIG;
+        const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
+        if (ech) params.push({ key: 'ech', val: ech });
+    } else {
+        params.push({ key: 'ech', val: META_ECH_CONFIG });
     }
-
-    const httpsRecord = packHttpsParamsWithHints(1, ".", [
-        { key: 'alpn', val: alpn },
-        { key: 'ech', val: ech || '' }
-    ], ipv4Hints, ipv6Hints);
-
-    const result = { domain, type: 'HTTPS', answers: [] };
-    result.ech = ech || null;
-    if (httpsRecord) result.httpsRecord = httpsRecord;
-    if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
-    if (ipv6Hints.length) result.ipv6hints = ipv6Hints;
-    return result;
+    return buildHttpsRecordFromParams(domain, params, ipv4, ipv6);
 }
 
 // 非静态域名的增强 HTTPS 记录构建
