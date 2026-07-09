@@ -38,7 +38,7 @@ const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/Kr
 
 const BUILTIN_HINTS = [
     {
-        domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.youtube.com"],
+        domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com"],
         ips: ["2001:4860:4827:7700:9876:5432:10fe:dcba"],
         noA: true,
         noAAAA: false
