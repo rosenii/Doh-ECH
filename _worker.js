@@ -42,9 +42,12 @@ const BUILTIN_HINTS = {
     },
     "*.google.com": {
         ips: ["22001:4860:4827:7700:9876:5432:10fe:dcba"],
-        noA: true,//屏蔽A记录
-        noAAAA: true//屏蔽AAAA记录
+        noA: true//屏蔽A记录
     },
+    "*.google.com.hk": {
+        ips: ["22001:4860:4827:7700:9876:5432:10fe:dcba"],
+        noA: true
+    },    
     "*.googlevideo.com": {
         ips: [],
         noA: true
@@ -225,25 +228,42 @@ async function resolveDNS(domain, type, config, clientIP) {
         else if (realOwner === 'META') effectiveMeta = true;
     }
 
-    // A/AAAA 处理
-    if (type === 'A' || type === 'AAAA') {
-        // 增强模式下根据规则屏蔽 A/AAAA 记录
-        if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
-            const ruleObj = matchRule(domain, config);
-            if (ruleObj) {
-                if (type === 'A' && ruleObj.noA) return { domain, type, answers: [], ech: null };
-                if (type === 'AAAA' && ruleObj.noAAAA) return { domain, type, answers: [], ech: null };
+// A/AAAA 处理
+if (type === 'A' || type === 'AAAA') {
+    // 1. 增强模式下，如果规则匹配且提供了对应类型的 IP，则直接返回
+    if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
+        const ruleObj = matchRule(domain, config);
+        if (ruleObj) {
+            let ips = [];
+            if (type === 'A') {
+                ips = ruleObj.ips.filter(ip => !ip.includes(':'));
+            } else {
+                ips = ruleObj.ips.filter(ip => ip.includes(':'));
+            }
+            if (ips.length > 0) {
+                if (config.shuffle !== 'false') ips = shuffle(ips);
+                return { domain, type, answers: ips, ech: null };
             }
         }
-
-        if (effectiveCF || effectiveMeta) {
-            return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
-        }
-        const dnsType = type === 'AAAA' ? 28 : 1;
-        const data = await queryUpstreamDNS(domain, dnsType, clientIP);
-        const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
-        return { domain, type, answers, ech: null };
     }
+    // 2. 增强模式下根据规则屏蔽 A/AAAA 记录
+    if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
+        const ruleObj = matchRule(domain, config);
+        if (ruleObj) {
+            if (type === 'A' && ruleObj.noA) return { domain, type, answers: [], ech: null };
+            if (type === 'AAAA' && ruleObj.noAAAA) return { domain, type, answers: [], ech: null };
+        }
+    }
+
+    // 3. 静态域名或上游查询
+    if (effectiveCF || effectiveMeta) {
+        return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
+    }
+    const dnsType = type === 'AAAA' ? 28 : 1;
+    const data = await queryUpstreamDNS(domain, dnsType, clientIP);
+    const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
+    return { domain, type, answers, ech: null };
+}
 
     // HTTPS 处理
     if (type === 'HTTPS') {
