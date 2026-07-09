@@ -935,6 +935,10 @@ const entries = sub.split(',').map(s => s.trim()).filter(s => s);
     if (allDomains.size > 0) config.cfDomain = Array.from(allDomains).join(',');
 }
 
+function isDomainIpv4Only(domain) {
+    return IPV4_ONLY_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
+}
+
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
