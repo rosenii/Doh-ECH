@@ -1,6 +1,6 @@
 # DOH-ECH ： CF-Pages 实现 
 
- **个人 DNS-over-HTTPS (DoH) 服务器**，智能为 Cloudflare / Meta 站点注入 ECH 配置，实现隐藏SNI，支持自定义优选IP、多优选域名解析，同时自动获取ecs，切换网络时可无感返回对应运营商的最佳ip，支持全球边缘缓存,实现CF/META 站点返回携带ech配置的记录，其他站点使用Google和Aliyun DOH竞速查询结果转发返回记录，通过优选后亦可直连CF托管网站/Meta 站点 如X，Facebook等 。
+ **个人 DNS-over-HTTPS (DoH) 服务器**，1.智能为 Cloudflare / Meta 站点注入 ECH 配置,实现隐藏SNI直连访问 X,Facebook等 2.为fastlyCDN站点如Reddit,Twitch返回alpn:h3的HTTPS记录,实现直连访问。3.为Google站点返回alpn:h3,仅iphv6ints的HTTPS记录，需客户端支持ipv6网络,实现直连Google,YouTube 。
 
 ---
 ## 警告
@@ -58,6 +58,8 @@
 | `exclude` | 返回记录排除指定ip/domain |（`1.1.1.1`/ `cf.cf` ） |``|
 | `shuffle` |  乱序返回记录 |默认`false`（`false`/ `true` ） |`false`|
 | `area` |  指定ip区域 |留空`不过滤`（`area=hk,sg,jp` ） |``|
+| `enhance` |  增强模式 fastly,Google直连 |可选`off``rule` `full`    |``|
+| `rules` |  增强模式域名ip匹配规则 |格式`domain1,domain2:ip1,ip2-noA-noAAAA`（`-noA/AAAA`屏蔽且不返回A/AAAA记录 ） |``|
 
 > **注意**：`cf`,`meta` 参数仅当目标域名为 CF/META站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF/META 域名。
 
