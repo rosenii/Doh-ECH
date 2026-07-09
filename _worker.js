@@ -1170,7 +1170,7 @@ function getHtml() {
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 14px;
             color: var(--text);
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             transition: all 0.2s;
             font-family: inherit;
             outline: none;
@@ -1499,14 +1499,14 @@ function getHtml() {
                     <label>地区筛选 <span class="badge badge-cf">area</span></label>
                     <input type="text" id="area" placeholder="hk, hkg, 香港, sin 等，留空全部">
                 </div>
-            </div>
-            <div class="toggle-row" style="margin-top: 0.5rem;">
-                <label class="checkbox-container">
-                    <input type="checkbox" id="shuffle" checked>
-                    <span class="checkmark"></span>
-                    <span>随机乱序 IP</span>
-                </label>
-            </div>
+                <div>                    
+                    <label class="checkbox-container">
+                      <input type="checkbox" id="shuffle" checked>
+                      <span class="checkmark"></span>
+                      <span>随机乱序 IP</span>
+                    </label>  
+                </div>                    
+            </div>         
         </div>
 
         <!-- Meta 高级参数 -->
@@ -1553,7 +1553,7 @@ function getHtml() {
                     <input type="text" id="alpn" placeholder="h3,h2" value="h3,h2">
                 </div>
                 <div>
-                    <label>ClientIP (ECS) <span class="badge">clientIp</span></label></label>
+                    <label>ECS <span class="badge">clientIp</span></label></label>
                     <input type="text" id="clientIp" placeholder="1.2.4.8" value="">
                 </div>
             </div>
