@@ -40,7 +40,7 @@ const BUILTIN_HINTS = {
         ips: ["151.101.1.140"]
     },
     "*.google.com": {
-        ips: ["22001:4860:4827:7700:9876:5432:10fe:dcba:noa:noaaaa"],
+        ips: ["22001:4860:4827:7700:9876:5432:10fe:dcba"],
         noA: true,
         noAAAA: true
     },
