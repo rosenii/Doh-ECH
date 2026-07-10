@@ -5,14 +5,14 @@
  * - HTTPS hints 复用归属探测 IP
  * - best参数 控制全局跟随优选，所有CF站点均使用配置的优选结果 默认false
  * - clientIp参数 ECS支持，默认自动获取
- * - cf参数 解析优选的域名记录返回
- * - sub参数  多订阅缓存 
+ * - cf参数 解析优选域名的ip记录返回
+ * - sub参数  CF优选订阅，格式 ip-https://ip.txt, cf-https://domain.txt
  * - exclude参数 过滤排除不合适的优选ip/domain
  * - shuffle 参数 返回记录随机乱序开关 默认false
- * - area 参数   返回订阅列表指定区域的ip记录
+ * - area 参数   返回订阅列表指定区域的ip记录 格式： hk,sg,电信,移动,us
  * - enhance (off/rule/full)
  * - alpn ［h3,h2］
- * - rules domain:noa:noaaaa:ipv4
+ * - rules *domain1,*domain2:ip1,ip2-noA-noAAAA
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
