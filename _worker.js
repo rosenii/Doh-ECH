@@ -50,9 +50,9 @@ const BUILTIN_HINTS = [
         noAAAA: true
     },
     {
-        domains: ["*.goohlevideo.com"],
+        domains: ["*.goohlevideo.com"],//
         ips: [],        
-        noA: true,
+        noA: true,//屏蔽被墙的A记录
         noAAAA: false
     },    
     // 传统简单写法仍可混用（自动转换）
@@ -95,7 +95,8 @@ function buildConfig(url, headers = null) {
         exclude: get('exclude', 'X-Exclude'), shuffle: get('shuffle', 'X-Shuffle') || 'true',
         area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'off',
         rules: get('rules', 'X-Rules'), alpn: get('alpn', 'X-Alpn') || 'h3,h2',
-        clientIp: get('clientIp', 'X-Client-IP')
+        clientIp: get('clientIp', 'X-Client-IP'),
+        no6: get('no6', 'X-No6') || 'false',   // 新增，全局屏蔽 AAAA 
     };
 }
 
@@ -235,7 +236,24 @@ async function resolveDNS(domain, type, config, clientIP) {
 
 // A/AAAA 处理
 if (type === 'A' || type === 'AAAA') {
-    // 1. 增强模式下，如果规则匹配且提供了对应类型的 IP，则直接返回
+    
+    //1.全局屏蔽AAAA
+    if (type === 'AAAA' && config.no6 === 'true') {
+    const isEnhanceActive = config.enhance === 'rule' || config.enhance === 'full';
+    const isStatic = effectiveCF || effectiveMeta;
+    if (isEnhanceActive && !isStatic) {
+        const ruleObj = matchRule(domain, config);
+        // 规则匹配且未要求屏蔽 AAAA，或规则中提供了 IPv6 地址 → 放行
+        if (ruleObj && (!ruleObj.noAAAA || ruleObj.ips.some(ip => ip.includes(':')))) {
+            // 继续往下正常处理
+        } else {
+            return { domain, type, answers: [], ech: null };
+        }
+    } else {
+        return { domain, type, answers: [], ech: null };
+      }
+    } 
+    // 2. 增强模式下，如果规则匹配且提供了对应类型的 IP，则直接返回
     if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
         const ruleObj = matchRule(domain, config);
         if (ruleObj) {
@@ -251,7 +269,7 @@ if (type === 'A' || type === 'AAAA') {
             }
         }
     }
-    // 2. 增强模式下根据规则屏蔽 A/AAAA 记录
+    // 3. 增强模式下根据规则屏蔽 A/AAAA 记录
     if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
         const ruleObj = matchRule(domain, config);
         if (ruleObj) {
@@ -260,7 +278,7 @@ if (type === 'A' || type === 'AAAA') {
         }
     }
 
-    // 3. 静态域名或上游查询
+    // 4. 静态域名或上游查询
     if (effectiveCF || effectiveMeta) {
         return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
     }
@@ -1744,6 +1762,13 @@ function getHtml() {
                     <label>ECS <span class="badge">clientIp</span></label></label>
                     <input type="text" id="clientIp" placeholder="1.2.4.8" value="">
                 </div>
+                <div class="toggle-row" style="margin-top: 0.5rem;">
+    <label class="checkbox-container">
+        <input type="checkbox" id="no6">
+        <span class="checkmark"></span>
+        <span>全局屏蔽 IPv6</span>
+    </label>
+</div>
             </div>
         </div>
 
@@ -1812,7 +1837,8 @@ function getHtml() {
             if (alpn) params.set('alpn', alpn);
             const clientIp = document.getElementById('clientIp').value.trim();
             if (clientIp) params.set('clientIp', clientIp);
-
+            const no6 = document.getElementById('no6').checked;
+            if (no6) params.set('no6', 'true');
             if (mode === 'cf') {
                 const ip4 = document.getElementById('ip4').value.trim();
                 const ip6 = document.getElementById('ip6').value.trim();
@@ -1858,7 +1884,8 @@ function getHtml() {
             const resultDiv = document.getElementById('result');
             const requestUrlContainer = document.getElementById('requestUrlContainer');
             const requestUrlText = document.getElementById('requestUrlText');
-
+            const no6 = document.getElementById('no6').checked;
+            if (no6) params.set('no6', 'true');
             if (!domain) {
                 resultDiv.innerHTML = '<span class="error">请输入域名</span>';
                 resultDiv.className = 'result-box error';
