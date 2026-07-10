@@ -819,17 +819,13 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    const ids = { 'alpn': 1, 'no-default-alpn': 2, 'mandatory': 3,
-                  'ipv4hint': 4, 'ech': 5, 'ipv6hint': 6 };
+    const ids = { 'alpn': 1, 'ech': 5, 'ipv4hint': 4, 'ipv6hint': 6 };
     const id = ids[key];
-    if (id === undefined) return null;
+    if (!id) return null;
     let valBuf;
-
-    if (key === 'no-default-alpn') {
-        valBuf = new Uint8Array(0);
-    } else if (key === 'alpn' || key === 'mandatory' || key === 'ipv4hint' || key === 'ipv6hint') {
+    if (key === 'alpn' || key === 'ipv4hint' || key === 'ipv6hint') {
         const parts = value.split(',');
-        if (key === 'alpn' || key === 'mandatory') {
+        if (key === 'alpn') {
             valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
             let o = 0;
             for (const p of parts) {
@@ -853,14 +849,16 @@ function encodeSvcParam(key, value) {
                 offset += 16;
             }
         }
-    } else { // ech 等 base64
+    } else {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
-        } catch (e) { return null; }
+        } catch (e) {
+            console.error('encodeSvcParam base64 error:', e);
+            return null;
+        }
     }
-
     const res = new Uint8Array(4 + valBuf.length);
     const v = new DataView(res.buffer);
     v.setUint16(0, id);
