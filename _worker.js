@@ -584,11 +584,19 @@ function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
 }
 
 function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
-    const keyOrder = { alpn: 1, 'no-default-alpn': 2, mandatory: 3,
-                       ipv4hint: 4, ech: 5, ipv6hint: 6 };
+    const keyOrder = {
+        'mandatory': 0,
+        'alpn': 1,
+        'no-default-alpn': 2,
+        'port': 3,
+        'ipv4hint': 4,
+        'ech': 5,
+        'ipv6hint': 6
+    };
     const map = new Map();
     const booleanKeys = new Set(['no-default-alpn']);
     for (const p of params) {
+        if (p.key === 'port') continue;   // 过滤上游 port
         if (p.key && p.val !== undefined) {
             if (p.val !== '' || booleanKeys.has(p.key)) {
                 map.set(p.key, p.val);
@@ -819,11 +827,12 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    // 键值对必须严格按数值升序排列，顺序错误会导致客户端拒绝整个记录
+    // 严格按 RFC 9460 定义键值
     const ids = {
+        'mandatory': 0,
         'alpn': 1,
         'no-default-alpn': 2,
-        'mandatory': 3,
+        'port': 3,
         'ipv4hint': 4,
         'ech': 5,
         'ipv6hint': 6
@@ -833,12 +842,8 @@ function encodeSvcParam(key, value) {
 
     let valBuf;
 
-    // 布尔型参数：值设为空字符串，编码为长度为0的数组
-    if (key === 'no-default-alpn') {
-        valBuf = new Uint8Array(0);
-    }
-    // ALPN 和 mandatory（字符串列表）
-    else if (key === 'alpn' || key === 'mandatory') {
+    // mandatory 的值是参数键的列表，编码与 alpn 类似
+    if (key === 'mandatory') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
         let o = 0;
@@ -846,9 +851,21 @@ function encodeSvcParam(key, value) {
             valBuf[o++] = p.length;
             for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    }
-    // IPv4 提示
-    else if (key === 'ipv4hint') {
+    } else if (key === 'no-default-alpn') {
+        valBuf = new Uint8Array(0);
+    } else if (key === 'alpn') {
+        const parts = value.split(',');
+        valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
+        let o = 0;
+        for (const p of parts) {
+            valBuf[o++] = p.length;
+            for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
+        }
+    } else if (key === 'port') {
+        const portNum = parseInt(value, 10) || 443;
+        valBuf = new Uint8Array(2);
+        new DataView(valBuf.buffer).setUint16(0, portNum);
+    } else if (key === 'ipv4hint') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.length * 4);
         let offset = 0;
@@ -857,9 +874,7 @@ function encodeSvcParam(key, value) {
             valBuf.set(bytes, offset);
             offset += 4;
         }
-    }
-    // IPv6 提示
-    else if (key === 'ipv6hint') {
+    } else if (key === 'ipv6hint') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.length * 16);
         let offset = 0;
@@ -868,9 +883,7 @@ function encodeSvcParam(key, value) {
             valBuf.set(bytes, offset);
             offset += 16;
         }
-    }
-    // ECH 等 Base64 字段
-    else {
+    } else if (key === 'ech') {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
@@ -884,21 +897,6 @@ function encodeSvcParam(key, value) {
     v.setUint16(2, valBuf.length);
     res.set(valBuf, 4);
     return res;
-}
-
-/**
- * 域名编码为 DNS 标签格式
- */
-function encodeDnsName(domain) {
-    const parts = domain.split('.');
-    const buf = new Uint8Array(domain.length + 2);
-    let offset = 0;
-    for (const part of parts) {
-        buf[offset++] = part.length;
-        for (let i = 0; i < part.length; i++) buf[offset++] = part.charCodeAt(i);
-    }
-    buf[offset++] = 0;
-    return buf.slice(0, offset);
 }
 
 /**
