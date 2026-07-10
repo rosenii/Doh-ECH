@@ -829,8 +829,7 @@ function encodeSvcParam(key, value) {
     if (id === undefined) return null;
     let valBuf;
 
-     if (key === 'no-default-alpn') {
-        // 空值，长度为0
+    if (key === 'no-default-alpn') {
         valBuf = new Uint8Array(0);
     } else if (key === 'alpn' || key === 'mandatory' || key === 'ipv4hint' || key === 'ipv6hint') {
         const parts = value.split(',');
@@ -858,13 +857,14 @@ function encodeSvcParam(key, value) {
                 offset += 16;
             }
         }
-    } else { // ech 等 base64 编码
+    } else { // ech 等 base64
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
         } catch (e) { return null; }
     }
+
     const res = new Uint8Array(4 + valBuf.length);
     const v = new DataView(res.buffer);
     v.setUint16(0, id);
