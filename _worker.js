@@ -819,7 +819,7 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    // 键值对严格按数值升序排列，顺序错误会导致客户端拒绝整个 HTTPS 记录
+    // 键值对必须严格按数值升序排列，顺序错误会导致客户端拒绝整个记录
     const ids = {
         'alpn': 1,
         'no-default-alpn': 2,
@@ -829,11 +829,11 @@ function encodeSvcParam(key, value) {
         'ipv6hint': 6
     };
     const id = ids[key];
-    if (id === undefined) return null;   // 自动丢弃非法参数（如 port）
+    if (id === undefined) return null;
 
     let valBuf;
 
-    // 布尔型参数（空值）
+    // 布尔型参数：值设为空字符串，编码为长度为0的数组
     if (key === 'no-default-alpn') {
         valBuf = new Uint8Array(0);
     }
@@ -869,16 +869,13 @@ function encodeSvcParam(key, value) {
             offset += 16;
         }
     }
-    // ECH 等 Base64 编码字段
+    // ECH 等 Base64 字段
     else {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
-        } catch (e) {
-            console.error('encodeSvcParam base64 error:', e);
-            return null;
-        }
+        } catch (e) { return null; }
     }
 
     const res = new Uint8Array(4 + valBuf.length);
@@ -888,6 +885,7 @@ function encodeSvcParam(key, value) {
     res.set(valBuf, 4);
     return res;
 }
+
 /**
  * 域名编码为 DNS 标签格式
  */
