@@ -819,37 +819,54 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    const ids = { 'alpn': 1, 'ech': 5, 'ipv4hint': 4, 'ipv6hint': 6 };
+    // 扩展 IDs 以支持新参数，但保持原有键不变
+    const ids = {
+        'alpn': 1, 'no-default-alpn': 2, 'mandatory': 3,
+        'ipv4hint': 4, 'ech': 5, 'ipv6hint': 6
+    };
     const id = ids[key];
-    if (!id) return null;
+    if (id === undefined) return null;   // 未知参数（如 port）直接丢弃
+
     let valBuf;
-    if (key === 'alpn' || key === 'ipv4hint' || key === 'ipv6hint') {
+
+    // 处理新增的布尔型参数（空值）
+    if (key === 'no-default-alpn') {
+        valBuf = new Uint8Array(0);
+    }
+    // ALPN 和 mandatory 使用相同的编码逻辑（与您的原始 alpn 处理完全一致）
+    else if (key === 'alpn' || key === 'mandatory') {
         const parts = value.split(',');
-        if (key === 'alpn') {
-            valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
-            let o = 0;
-            for (const p of parts) {
-                valBuf[o++] = p.length;
-                for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
-            }
-        } else if (key === 'ipv4hint') {
-            valBuf = new Uint8Array(parts.length * 4);
-            let offset = 0;
-            for (const ip of parts) {
-                const bytes = ipToBytes(ip.trim());
-                valBuf.set(bytes, offset);
-                offset += 4;
-            }
-        } else if (key === 'ipv6hint') {
-            valBuf = new Uint8Array(parts.length * 16);
-            let offset = 0;
-            for (const ip of parts) {
-                const bytes = ipv6ToBytes(ip.trim());
-                valBuf.set(bytes, offset);
-                offset += 16;
-            }
+        valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
+        let o = 0;
+        for (const p of parts) {
+            valBuf[o++] = p.length;
+            for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    } else {
+    }
+    // IPv4 hints（保留原始逻辑）
+    else if (key === 'ipv4hint') {
+        const parts = value.split(',');
+        valBuf = new Uint8Array(parts.length * 4);
+        let offset = 0;
+        for (const ip of parts) {
+            const bytes = ipToBytes(ip.trim());
+            valBuf.set(bytes, offset);
+            offset += 4;
+        }
+    }
+    // IPv6 hints（保留原始逻辑）
+    else if (key === 'ipv6hint') {
+        const parts = value.split(',');
+        valBuf = new Uint8Array(parts.length * 16);
+        let offset = 0;
+        for (const ip of parts) {
+            const bytes = ipv6ToBytes(ip.trim());
+            valBuf.set(bytes, offset);
+            offset += 16;
+        }
+    }
+    // ECH 等 Base64 字段（保留原始逻辑）
+    else {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
@@ -859,6 +876,7 @@ function encodeSvcParam(key, value) {
             return null;
         }
     }
+
     const res = new Uint8Array(4 + valBuf.length);
     const v = new DataView(res.buffer);
     v.setUint16(0, id);
