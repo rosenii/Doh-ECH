@@ -1766,7 +1766,7 @@ function getHtml() {
     <label class="checkbox-container">
         <input type="checkbox" id="no6">
         <span class="checkmark"></span>
-        <span>全局屏蔽 IPv6</span>
+        <span>全局屏蔽 AAAA</span>
     </label>
 </div>
             </div>
