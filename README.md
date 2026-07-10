@@ -1,4 +1,4 @@
-# DOH-ECH ： CF-Pages 实现 
+# DOH-ECH ：私人DOH服务器+HTTPS RR控制器 + ECH注入器
 
  **个人 DNS-over-HTTPS (DoH) 服务器**，1.智能为 Cloudflare / Meta 站点注入 ECH 配置,实现隐藏SNI直连访问 X,Facebook等 2.为fastlyCDN站点如Reddit,Twitch返回alpn:h3的HTTPS记录,实现直连访问。3.为Google站点返回alpn:h3,仅ipv6hints的HTTPS记录，需客户端支持ipv6网络,实现直连Google,YouTube 。
 
