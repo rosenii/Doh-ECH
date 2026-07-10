@@ -8,12 +8,12 @@
  * - cf参数 解析优选域名的ip记录返回
  * - sub参数  CF优选订阅，格式 ip-https://ip.txt, cf-https://domain.txt
  * - exclude参数 过滤排除不合适的优选ip/domain
- * - shuffle 参数 返回记录随机乱序开关 默认false
+ * - shuffle 参数 返回记录随机乱序开关 默认true
  * - area 参数   返回订阅列表指定区域的ip记录 格式： hk,sg,电信,移动,us
  * - enhance (off/rule/full)
  * - alpn ［h3,h2］
  * - rules *domain1,*domain2:ip1,ip2-noA-noAAAA
- * - no6  全局屏蔽AAAA记录
+ * - no6  全局屏蔽AAAA记录 默认false
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -589,8 +589,6 @@ async function buildFakeEchResponse(config, domain, clientIP, isCF) {
 }
 
 // ===================== 第二部分：工具函数 =====================
-// 注意：这些函数被第一部分的核心代码调用，必须全部存在。
-
 /**
  * IP 列表解析（支持逗号分隔或 JSON 数组）
  * @param {string} raw - 原始字符串
