@@ -18,8 +18,8 @@
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';
-const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
+const UPSTREAM_DNS_CUSTOM = 'https://dns.google/dns-query';
+const UPSTREAM_JSON_CUSTOM = 'https://dns.google/resolve';
 
 //仅支持ipv4的站点
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
