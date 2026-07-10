@@ -405,12 +405,10 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
     const paramMap = new Map();
     if (Array.isArray(upstreamParams)) {
         for (const p of upstreamParams) {
-            if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
+         if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
         }
     }
     paramMap.set('alpn', alpn);
-    paramMap.set('no-default-alpn', '');
-    paramMap.set('mandatory', 'alpn');
     if (ipv4.length) paramMap.set('ipv4hint', ipv4.join(','));
     if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
 
