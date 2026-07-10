@@ -588,7 +588,7 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
         'mandatory': 0,
         'alpn': 1,
         'no-default-alpn': 2,
-        'port': 3,
+        'port': 3,               // 保留定义，但后面会过滤掉
         'ipv4hint': 4,
         'ech': 5,
         'ipv6hint': 6
@@ -596,7 +596,7 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
     const map = new Map();
     const booleanKeys = new Set(['no-default-alpn']);
     for (const p of params) {
-        if (p.key === 'port') continue;   // 过滤上游非法 port
+        if (p.key === 'port') continue;   // 丢弃任何残留的 port 参数
         if (p.key && p.val !== undefined) {
             if (p.val !== '' || booleanKeys.has(p.key)) {
                 map.set(p.key, p.val);
@@ -828,16 +828,16 @@ function packHttpsParams(priority, target, params) {
  */
 function encodeSvcParam(key, value) {
     const ids = {
-        'mandatory': 0,          // 新增
+        'mandatory': 0,          // 新增，RFC 9460 标准
         'alpn': 1,
         'no-default-alpn': 2,    // 新增
-        'port': 3,
+        'port': 3,               // 仅作为占位，我们不会主动使用它
         'ipv4hint': 4,
         'ech': 5,
         'ipv6hint': 6
     };
     const id = ids[key];
-    if (id === undefined) return null;   // 遇到未知键（如上游非法 port）直接丢弃
+    if (id === undefined) return null;   // 未知参数（如上游非法 port）自动丢弃
     let valBuf;
 
     // 新增：mandatory 编码（与 alpn 相同，都是字符串列表）
@@ -854,7 +854,7 @@ function encodeSvcParam(key, value) {
     else if (key === 'no-default-alpn') {
         valBuf = new Uint8Array(0);
     }
-    // 原有 alpn 分支（保持不变）
+    // 原有 alpn 分支
     else if (key === 'alpn') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
