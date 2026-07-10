@@ -40,8 +40,8 @@ const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/Kr
 const BUILTIN_HINTS = [
     {
         domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
-        ips: ["2001:4860:4827:7700:abcd:ef01:2345:6789","2001:4860:4827:7700:1357:2468:369a:48bf","2001:4860:4827:7700:f001:f002:f003:f004","2001:4860:4827:7700:0000:abcd:1234:5679"],
-       // noA: true,
+        ips: ["2001:4860:4827:7700:abcd:ef01:2345:6789","2001:4860:4827:7700:1357:2468:369a:48bf","2001:4860:4827:7700:f001:f002:f003:f004","2001:4860:4827:7700:0000:abcd:1234:5679","2001:4860:4827:7700:1411:1222:3343:4144","2001:4860:4827:7700:64:22:33:44"],
+        noA: true,
         noAAAA: false
     },
     {
