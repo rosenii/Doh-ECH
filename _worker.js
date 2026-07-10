@@ -18,8 +18,8 @@
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_DNS_ALI = 'https://dns.quad9.net/dns-query';
-const UPSTREAM_JSON_ALI = 'https://dns.quad9.net/dns-query';
+const UPSTREAM_DNS_CUSTOM = 'https://dns.quad9.net/dns-query';
+const UPSTREAM_JSON_CUSTOM = 'https://dns.quad9.net/dns-query';
 
 const CF_STATIC_DOMAINS = [
     "twimg.com", "twitter.com", "x.com", "t.co",
@@ -683,7 +683,7 @@ async function queryUpstreamDNS(name, type, clientIP = '') {
         }
     } catch (e) {}
 
-    const urls = [UPSTREAM_JSON_GOOGLE + '?' + params.toString(), UPSTREAM_JSON_ALI + '?' + params.toString()];
+    const urls = [UPSTREAM_JSON_GOOGLE + '?' + params.toString(), UPSTREAM_JSON_CUSTOM + '?' + params.toString()];
     const promises = urls.map(url =>
         fetch(url, { headers: { 'Accept': 'application/dns-json' } })
             .then(res => res.ok ? res.json() : Promise.reject())
@@ -914,7 +914,7 @@ async function forwardQuery(body) {
         body
     };
     const pGoogle = fetch(UPSTREAM_DNS_GOOGLE, reqInit).then(res => res.ok ? res : Promise.reject());
-    const pAli = fetch(UPSTREAM_DNS_ALI, reqInit).then(res => res.ok ? res : Promise.reject());
+    const pAli = fetch(UPSTREAM_DNS_CUSTOM, reqInit).then(res => res.ok ? res : Promise.reject());
     try { return await Promise.any([pGoogle, pAli]); } catch { return fetch(UPSTREAM_DNS_GOOGLE, reqInit); }
 }
 
