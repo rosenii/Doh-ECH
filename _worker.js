@@ -586,11 +586,18 @@ function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
 }
 
 function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
-    const keyOrder = { alpn: 1, ipv4hint: 4, ech: 5, ipv6hint: 6 };
+    const keyOrder = { port: 0, alpn: 1, 'no-default-alpn': 2, mandatory: 3,
+                       ipv4hint: 4, ech: 5, ipv6hint: 6 };
     const map = new Map();
+    const booleanKeys = new Set(['no-default-alpn']);
     for (const p of params) {
-        if (p.key && p.val !== undefined && p.val !== '') map.set(p.key, p.val);
+        if (p.key && p.val !== undefined) {
+            if (p.val !== '' || booleanKeys.has(p.key)) {
+                map.set(p.key, p.val);
+            }
+        }
     }
+    // 覆盖 hints（确保最新）
     if (ipv4Hints.length > 0) map.set('ipv4hint', ipv4Hints.join(','));
     else map.delete('ipv4hint');
     if (ipv6Hints.length > 0) map.set('ipv6hint', ipv6Hints.join(','));
@@ -648,7 +655,7 @@ function shuffle(arr) {
 
 function injectEnhanceDefaults(params) {
     const existingKeys = new Set(params.map(p => p.key));
-    if (!existingKeys.has('port')) params.push({ key: 'port', val: '443' });
+   // if (!existingKeys.has('port')) params.push({ key: 'port', val: '443' });
     if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: 'alpn' });
     if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
     // 不覆盖用户已显式设置的相同参数
