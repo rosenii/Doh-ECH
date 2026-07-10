@@ -415,6 +415,7 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
     if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
 
     const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
+    injectEnhanceDefaults(finalParams);
     return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
 }
 
@@ -566,12 +567,21 @@ function parseRules(rulesStr) {
 // ===================== HTTPS 记录打包 =====================
 function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
     const finalParams = sortAndDedupeParams([...params], ipv4Hints, ipv6Hints);
-    const httpsRecord = packHttpsParams(1, ".", finalParams);   // packHttpsParams 在第二部分
+    const httpsRecord = packHttpsParams(1, ".", finalParams);
     const result = { domain, type: 'HTTPS', answers: [] };
     result.ech = finalParams.find(p => p.key === 'ech')?.val || null;
     result.httpsRecord = httpsRecord;
     if (ipv4Hints.length) result.ipv4hints = ipv4Hints;
     if (ipv6Hints.length) result.ipv6hints = ipv6Hints;
+
+    // 新增：提取所有 SVCB 参数为键值对对象，便于 JSON 查看
+    const svcParams = {};
+    for (const p of finalParams) {
+        if (p.key === 'ech' || p.key === 'ipv4hint' || p.key === 'ipv6hint') continue;
+        svcParams[p.key] = p.val;
+    }
+    if (Object.keys(svcParams).length > 0) result.svcParams = svcParams;
+
     return result;
 }
 
@@ -634,6 +644,14 @@ function shuffle(arr) {
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
+}
+
+function injectEnhanceDefaults(params) {
+    const existingKeys = new Set(params.map(p => p.key));
+    if (!existingKeys.has('port')) params.push({ key: 'port', val: '443' });
+    if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: 'alpn' });
+    if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
+    // 不覆盖用户已显式设置的相同参数
 }
 
 /**
