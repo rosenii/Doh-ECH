@@ -61,8 +61,10 @@
 | `area` |  指定ip区域 |留空`不过滤`（`area=hk,sg,jp` ） |``|
 | `enhance` |  增强模式 fastly,Google直连 |可选`off` `rule` `full`    |``|
 | `rules` |  增强模式域名ip匹配规则 |格式`*.domain1,*.domain2:ip1,ip2-noA-noAAAA`（`-noA/AAAA`屏蔽且不返回A/AAAA记录 ） |``|
+| `alpn` |  alpn列表 |默认 `h3,h2`     |``|
+| `no6` |  全局屏蔽AAAA记录 |默认 `false`     |``|
 
-> **注意**：`cf`,`meta` 参数仅当目标域名为 CF/META站点（静态列表匹配或 CIDR 探测）时才会生效，避免误替换非 CF/META 域名。
+
 
 ---
 
