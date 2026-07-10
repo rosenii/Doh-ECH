@@ -13,6 +13,7 @@
  * - enhance (off/rule/full)
  * - alpn ［h3,h2］
  * - rules *domain1,*domain2:ip1,ip2-noA-noAAAA
+ * - no6  全局屏蔽AAAA记录
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -50,7 +51,7 @@ const BUILTIN_HINTS = [
         noAAAA: true
     },
     {
-        domains: ["*.goohlevideo.com"],//
+        domains: ["*.googlevideo.com"],//
         ips: [],        
         noA: true,//屏蔽被墙的A记录
         noAAAA: false
