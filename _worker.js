@@ -404,6 +404,8 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
         }
     }
     paramMap.set('alpn', alpn);
+    paramMap.set('no-default-alpn', '');
+    paramMap.set('mandatory', 'alpn');
     if (ipv4.length) paramMap.set('ipv4hint', ipv4.join(','));
     if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
 
