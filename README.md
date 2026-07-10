@@ -72,14 +72,12 @@
 
 
 ---
-# DoH-ECH 增强模式 (Enhance Mode) 功能与使用教程
-
-## 简介
+## 增强模式 (Enhance Mode) 功能与使用
 增强模式是 DoH-ECH 的一项高级功能，允许您为**非 Cloudflare/Meta 域名**（普通网站）主动注入连接优化参数，例如强制 QUIC (HTTP/3)、提供自定义 IP 提示 (IP hints) 以及精确屏蔽 A/AAAA 记录。这不仅能加速网站访问，还能解决某些浏览器因协议偏好导致的连接失败问题。
 
 > **注意**：增强模式**不会影响**静态列表中的 Cloudflare/Meta 域名，这些站点的 ECH 注入和优选 IP 逻辑独立运行。
 
-## 模式状态
+### 模式状态
 增强模式通过 `enhance` 参数控制，共有三种状态：
 
 | 状态 | 值 | 行为 |
@@ -88,17 +86,17 @@
 | **规则模式** | `rule` | 仅对匹配**规则**的域名生效，未匹配域名保持原样。 |
 | **全局模式** | `full` | 对所有普通域名生效。规则匹配的域名优先使用规则 IP，未匹配的从上游获取。 |
 
-## 增强内容
+### 增强内容
 开启增强模式后，匹配到的域名将获得以下优化：
 
 - **ALPN 强制**：HTTPS 记录中注入 `alpn="h3,h2"`，引导浏览器优先使用 QUIC (HTTP/3)，失败时可回退 HTTP/2。可通过 `alpn` 参数自定义（如 `h3` 仅 QUIC）。
 - **IP Hints 注入**：HTTPS 记录中添加 `ipv4hint` 和/或 `ipv6hint`，浏览器可直接尝试这些 IP 建立连接，跳过 A/AAAA 查询。
 - **A/AAAA 记录屏蔽**：可通过规则标志 `noA` 或 `noAAAA` 完全屏蔽对应类型的 DNS 查询，强制浏览器依赖 hints 或仅使用特定 IP 版本。
 
-## 规则格式
+### 规则格式
 增强模式的核心是**规则**，用于精确指定需要优化的域名及其参数。
 
-### 规则字符串（`rules` 参数）
+#### 规则字符串（`rules` 参数）
 
 - **域名**：必填，支持通配符 `*.`（匹配所有子域及根域）。可逗号分隔多个域名。
 - **IP列表**：可选，多个 IP 用逗号分隔，支持 IPv4/IPv6。留空表示不提供自定义 IP。
@@ -106,86 +104,16 @@
 
 **示例**：
 `*.google.com:2001:4860:4827:7700::,142.250.80.78-noA`
-google.com,google.com.hk::noA-noAAAA
+`google.com,google.com.hk::noA-noAAAA`
 
 ---
 ## 特性
 
 - ✅ **DoH 服务**  
   提供 `/ech`（注入 ECH）和 `/doh`（纯净转发）两个标准 DoH 端点，支持 GET/POST。
-- ✅ **ECH 自动注入**  
-  - 对 **Cloudflare** 托管域名自动获取动态 ECH 配置。  
-  - 对 **Meta**（Facebook 等）域名注入固定 ECH 配置。  
-  - 支持通过 `ech` 参数自定义 ECH 获取配置的来源域名。
-- ✅ **固定域名优选**  
-  内置 Cloudflare / Meta 自定义固定域名列表，直接返回预设的优选 IP（可自定义覆盖）。
-- ✅ **自定义 IP 替换**  
-  通过 `ip4`、`ip6`、`metaIp4`、`metaIp6` 等参数强制替换解析结果，支持逗号分隔或 JSON 数组。
-- ✅ **优选多域名解析**  
-  `cf`,`meta` 参数支持逗号分隔的多个域名，并发解析并合并去重 IP，适用于多 CDN 负载均衡。
 - ✅ **双上游竞速**  
-  同时查询 Google DNS 和阿里云 DNS，取最快响应，提高解析速度。
+  同时查询 Google DNS 和自选 DNS，取最快响应，提高解析速度。
 - ✅ **全球边缘缓存**  
   利用 Cloudflare Cache API 缓存上游 DNS 结果（A/AAAA 300s，HTTPS 600s），大幅减少上游请求次数。
-- ✅ **CIDR 归属探测**  
-  自动识别未知域名的 Cloudflare / Meta 归属，并注入对应 ECH（需配置 CIDR 列表）。
 - ✅ **ECS就近解析**  
   默认自动获取发起doh查询的用户端ClientIP（支持自定义 clientip=x.x.x.x）,实现就近解析，同时在频繁切换网络环境时仍能保证最佳解析结果。
-
----
-## 项目结构
-
-```
-/
-└── _worker.js           # 单文件，包含前端页面、API、DoH 全部逻辑
-```
----
-## 📡 API 示例
-
-### JSON API
-
-```bash
-# 基础查询
-curl "https://your-domain.pages.dev/api/query?domain=twitter.com&type=A"
-
-# 携带参数
-curl "https://your-domain.pages.dev/api/query?domain=twitter.com&type=A&ip4=1.2.3.4&cf=backup.com"
-```
-
-**返回示例：**
-
-```json
-{
-  "domain": "twitter.com",
-  "type": "A",
-  "answers": ["104.18.10.118"],
-  "ech": null
-}
-```
-
-### DoH GET 请求
-
-```bash
-# 基础查询
-curl "https://your-domain.pages.dev/ech?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB"
-
-# 携带参数
-curl "https://your-domain.pages.dev/ech?dns=AAABAAAB...&ip4=1.2.3.4&cf=example.com"
-```
-
-### DoH POST 请求
-
-```bash
-# 通过请求头传参
-curl -X POST "https://your-domain.pages.dev/ech" \
-  --data-binary @dns-query.bin \
-  -H "Content-Type: application/dns-message" \
-  -H "X-Ip4: 1.2.3.4,5.6.7.8" \
-  -H "X-MetaIp4: 157.240.1.1" \
-  -H "X-CF: example.com,example2.com"
-
-# 通过 URL 参数传参
-curl -X POST "https://your-domain.pages.dev/ech?ip4=1.2.3.4" \
-  --data-binary @dns-query.bin \
-  -H "Content-Type: application/dns-message"
-```
