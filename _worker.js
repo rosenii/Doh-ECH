@@ -1879,8 +1879,7 @@ function getHtml() {
             const resultDiv = document.getElementById('result');
             const requestUrlContainer = document.getElementById('requestUrlContainer');
             const requestUrlText = document.getElementById('requestUrlText');
-            const no6 = document.getElementById('no6').checked;
-            if (no6) params.set('no6', 'true');
+
             if (!domain) {
                 resultDiv.innerHTML = '<span class="error">请输入域名</span>';
                 resultDiv.className = 'result-box error';
@@ -1904,7 +1903,8 @@ function getHtml() {
             if (alpn) params.set('alpn', alpn);
             const clientIp = document.getElementById('clientIp').value.trim();
             if (clientIp) params.set('clientIp', clientIp);
-
+            const no6 = document.getElementById('no6').checked;
+            if (no6) params.set('no6', 'true');
             if (mode === 'cf') {
                 const ip4 = document.getElementById('ip4').value.trim();
                 const ip6 = document.getElementById('ip6').value.trim();
