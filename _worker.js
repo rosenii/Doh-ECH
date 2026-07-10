@@ -17,9 +17,9 @@
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
-const UPSTREAM_DNS_ALI = 'https://dns.alidns.com/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_JSON_ALI = 'https://dns.alidns.com/resolve';
+const UPSTREAM_DNS_ALI = 'https://dns.quad9.net/dns-query';
+const UPSTREAM_JSON_ALI = 'https://dns.quad9.net/dns-query';
 
 const CF_STATIC_DOMAINS = [
     "twimg.com", "twitter.com", "x.com", "t.co",
