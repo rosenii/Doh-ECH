@@ -596,7 +596,7 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
     const map = new Map();
     const booleanKeys = new Set(['no-default-alpn']);
     for (const p of params) {
-        if (p.key === 'port') continue;   // 过滤上游 port
+        if (p.key === 'port') continue;   // 过滤上游非法 port
         if (p.key && p.val !== undefined) {
             if (p.val !== '' || booleanKeys.has(p.key)) {
                 map.set(p.key, p.val);
@@ -827,22 +827,20 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    // 严格按 RFC 9460 定义键值
     const ids = {
-        'mandatory': 0,
+        'mandatory': 0,          // 新增
         'alpn': 1,
-        'no-default-alpn': 2,
+        'no-default-alpn': 2,    // 新增
         'port': 3,
         'ipv4hint': 4,
         'ech': 5,
         'ipv6hint': 6
     };
     const id = ids[key];
-    if (id === undefined) return null;
-
+    if (id === undefined) return null;   // 遇到未知键（如上游非法 port）直接丢弃
     let valBuf;
 
-    // mandatory 的值是参数键的列表，编码与 alpn 类似
+    // 新增：mandatory 编码（与 alpn 相同，都是字符串列表）
     if (key === 'mandatory') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
@@ -851,9 +849,13 @@ function encodeSvcParam(key, value) {
             valBuf[o++] = p.length;
             for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    } else if (key === 'no-default-alpn') {
+    }
+    // 新增：no-default-alpn 布尔型空值
+    else if (key === 'no-default-alpn') {
         valBuf = new Uint8Array(0);
-    } else if (key === 'alpn') {
+    }
+    // 原有 alpn 分支（保持不变）
+    else if (key === 'alpn') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
         let o = 0;
@@ -861,11 +863,9 @@ function encodeSvcParam(key, value) {
             valBuf[o++] = p.length;
             for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    } else if (key === 'port') {
-        const portNum = parseInt(value, 10) || 443;
-        valBuf = new Uint8Array(2);
-        new DataView(valBuf.buffer).setUint16(0, portNum);
-    } else if (key === 'ipv4hint') {
+    }
+    // 原有 ipv4hint 分支
+    else if (key === 'ipv4hint') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.length * 4);
         let offset = 0;
@@ -874,7 +874,9 @@ function encodeSvcParam(key, value) {
             valBuf.set(bytes, offset);
             offset += 4;
         }
-    } else if (key === 'ipv6hint') {
+    }
+    // 原有 ipv6hint 分支
+    else if (key === 'ipv6hint') {
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.length * 16);
         let offset = 0;
@@ -883,12 +885,17 @@ function encodeSvcParam(key, value) {
             valBuf.set(bytes, offset);
             offset += 16;
         }
-    } else if (key === 'ech') {
+    }
+    // 原有 ech 分支
+    else {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
-        } catch (e) { return null; }
+        } catch (e) {
+            console.error('encodeSvcParam base64 error:', e);
+            return null;
+        }
     }
 
     const res = new Uint8Array(4 + valBuf.length);
@@ -898,7 +905,6 @@ function encodeSvcParam(key, value) {
     res.set(valBuf, 4);
     return res;
 }
-
 /**
  * 解析 DNS 报文头部与问题域
  */
