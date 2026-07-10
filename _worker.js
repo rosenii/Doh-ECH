@@ -292,6 +292,11 @@ if (type === 'A' || type === 'AAAA') {
 
     // HTTPS 处理
     if (type === 'HTTPS') {
+         // 增强模式优先
+         if (config.enhance && config.enhance !== 'off') {
+             const result = await buildEnhancedHttpsRecord(domain, config, clientIP);
+             return cleanResult(result);
+         }
         // CF/Meta 域名
         if (owner === 'CF' || owner === 'META') {
             const usePreferredHints = isStaticCF || isStaticMeta || best;
