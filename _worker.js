@@ -18,8 +18,8 @@
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_DNS_CUSTOM = 'https://dns.google/dns-query';
-const UPSTREAM_JSON_CUSTOM = 'https://dns.google/resolve';
+const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';
+const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
 
 //仅支持ipv4的站点
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
@@ -396,7 +396,7 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
         if (data?.Answer) {
             const rec = data.Answer.find(r => r.type === 65);
             if (rec) {
-                const parsed = parseRawHttpsRecord(rec.data);  // 在第二部分
+                const parsed = parseRawHttpsRecord(rec.data);
                 if (parsed) upstreamParams = parsed;
             }
         }
@@ -405,7 +405,7 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
     const paramMap = new Map();
     if (Array.isArray(upstreamParams)) {
         for (const p of upstreamParams) {
-         if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
+            if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
         }
     }
     paramMap.set('alpn', alpn);
@@ -584,7 +584,7 @@ function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
 }
 
 function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
-    const keyOrder = {  alpn: 1, 'no-default-alpn': 2, mandatory: 3,
+    const keyOrder = { alpn: 1, 'no-default-alpn': 2, mandatory: 3,
                        ipv4hint: 4, ech: 5, ipv6hint: 6 };
     const map = new Map();
     const booleanKeys = new Set(['no-default-alpn']);
@@ -595,7 +595,6 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
             }
         }
     }
-    // 覆盖 hints（确保最新）
     if (ipv4Hints.length > 0) map.set('ipv4hint', ipv4Hints.join(','));
     else map.delete('ipv4hint');
     if (ipv6Hints.length > 0) map.set('ipv6hint', ipv6Hints.join(','));
@@ -653,11 +652,10 @@ function shuffle(arr) {
 
 function injectEnhanceDefaults(params) {
     const existingKeys = new Set(params.map(p => p.key));
-   // if (!existingKeys.has('port')) params.push({ key: 'port', val: '443' });
     if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: 'alpn' });
     if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
-    // 不覆盖用户已显式设置的相同参数
 }
+
 
 /**
  * 多域名并发解析 IP，支持洗牌
@@ -870,7 +868,6 @@ function encodeSvcParam(key, value) {
     res.set(valBuf, 4);
     return res;
 }
-
 /**
  * 域名编码为 DNS 标签格式
  */
