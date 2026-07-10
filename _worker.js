@@ -586,7 +586,7 @@ function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
 }
 
 function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
-    const keyOrder = { port: 0, alpn: 1, 'no-default-alpn': 2, mandatory: 3,
+    const keyOrder = {  alpn: 1, 'no-default-alpn': 2, mandatory: 3,
                        ipv4hint: 4, ech: 5, ipv6hint: 6 };
     const map = new Map();
     const booleanKeys = new Set(['no-default-alpn']);
@@ -823,17 +823,13 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    const ids = { 'port': 0, 'alpn': 1, 'no-default-alpn': 2, 'mandatory': 3,
+    const ids = { 'alpn': 1, 'no-default-alpn': 2, 'mandatory': 3,
                   'ipv4hint': 4, 'ech': 5, 'ipv6hint': 6 };
     const id = ids[key];
     if (id === undefined) return null;
     let valBuf;
 
-    if (key === 'port') {
-        const portNum = parseInt(value, 10) || 443;
-        valBuf = new Uint8Array(2);
-        new DataView(valBuf.buffer).setUint16(0, portNum);
-    } else if (key === 'no-default-alpn') {
+     if (key === 'no-default-alpn') {
         // 空值，长度为0
         valBuf = new Uint8Array(0);
     } else if (key === 'alpn' || key === 'mandatory' || key === 'ipv4hint' || key === 'ipv6hint') {
