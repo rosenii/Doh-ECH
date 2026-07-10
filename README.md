@@ -8,33 +8,6 @@
 
 ---
 
-## 注意事项
-- **子请求上限**：免费计划每日 10 万次子请求，已通过缓存降低使用量，正常个人使用一般不会超出。
-- **ECH 有效性**：Meta 的 ECH 为固定配置（可能会过期），Cloudflare 的 ECH 从指定域名动态获取，可自定义 `ech` 参数。
-- **隐私与安全**：上游查询使用 Google 和Quad9的公共 DNS JSON API，注意数据隐私（ **可自行替换为其他 DoH 服务**）。
----
-## 部署步骤
-
-### 1. 部署到 Cloudflare Pages
-- 进入 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → **创建项目**。
-- 上传资产或连接 Git 仓库，上传 `_worker.js` 至项目根目录。
-- 部署完成后，访问分配的域名/绑定的自定义域名 即可。
-
-### 2. 使用方法
-- **前端网页测试查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
-
-- **DOH地址(完整参数示例)**：  
-  ```
-   "https://your-domain.pages.dev/ech?sub=ip-https://bestcf.pages.dev/gslege/Cfxyz.txt&best=true&shuffle=true&area=hk,jp,sg,us&exclude=bestcf.pages.dev&clientIp=1.2.4.8&cf=ip.sb,cloudflare-ech.com&ip4=162.159.39.22&ip6=2606:4700:839f:4fd6:ee45:836d:51a4:87b6"
-  ```
-- **配置 DoH 客户端**：  
-  -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过 URL 参数传递自定义内容。
-
-  
-  -- 使用代理工具：将需要直连的CF站点的域名解析服务器doh设置为`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义内容。
-  
-
----
 ## 路由说明
 
 | 路径          | 说明                                                                 |
@@ -72,7 +45,7 @@
 
 
 ---
-## 增强模式 (Enhance Mode) 功能与使用
+## Enhance Mode 功能与使用
 增强模式是 DoH-ECH 的一项高级功能，允许您为**非 Cloudflare/Meta 域名**（普通网站）主动注入连接优化参数，例如强制 QUIC (HTTP/3)、提供自定义 IP 提示 (IP hints) 以及精确屏蔽 A/AAAA 记录。这不仅能加速网站访问，还能解决某些浏览器因协议偏好导致的连接失败问题。
 
 > **注意**：增强模式**不会影响**静态列表中的 Cloudflare/Meta 域名，这些站点的 ECH 注入和优选 IP 逻辑独立运行。
@@ -106,8 +79,33 @@
 `*.google.com:2001:4860:4827:7700::,142.250.80.78-noA`
 `google.com,google.com.hk::noA-noAAAA`
 
+
+## 注意事项
+- **子请求上限**：免费计划每日 10 万次子请求，已通过缓存降低使用量，正常个人使用一般不会超出。
+- **ECH 有效性**：Meta 的 ECH 为固定配置（可能会过期），Cloudflare 的 ECH 从指定域名动态获取，可自定义 `ech` 参数。
+- **隐私与安全**：上游查询使用 Google 和Quad9的公共 DNS JSON API，注意数据隐私（ **可自行替换为其他 DoH 服务**）。
 ---
-## 特性
+## 部署步骤
+
+### 1. 部署到 Cloudflare Pages
+- 进入 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → **创建项目**。
+- 上传资产或连接 Git 仓库，上传 `_worker.js` 至项目根目录。
+- 部署完成后，访问分配的域名/绑定的自定义域名 即可。
+
+### 2. 使用方法
+- **前端网页测试查询**：直接访问首页（`/`），输入域名、选择类型，可展开高级选项填入自定义参数后查询。
+
+- **DOH地址(完整参数示例)**：  
+  ```
+   "https://your-domain.pages.dev/ech?sub=ip-https://bestcf.pages.dev/gslege/Cfxyz.txt&best=true&shuffle=true&area=hk,jp,sg,us&exclude=bestcf.pages.dev&clientIp=1.2.4.8&cf=ip.sb,cloudflare-ech.com&ip4=162.159.39.22&ip6=2606:4700:839f:4fd6:ee45:836d:51a4:87b6"
+  ```
+- **配置 DoH 客户端**：  
+  -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过 URL 参数传递自定义内容。
+
+  
+  -- 使用代理工具：将需要直连的CF站点的域名解析服务器doh设置为`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义内容。
+---
+## 项目特性
 
 - ✅ **DoH 服务**  
   提供 `/ech`（注入 ECH）和 `/doh`（纯净转发）两个标准 DoH 端点，支持 GET/POST。
