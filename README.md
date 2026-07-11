@@ -42,8 +42,8 @@
 | `alpn` |  alpn列表 |默认 `h3,h2`     |``|
 | `no6` |  全局屏蔽AAAA记录 |默认 `false`     |``|
 
-
-```ClientIP自动获取逻辑
+> **ClientIP自动获取逻辑**
+```
 客户端
   │
   │ DoH 请求
