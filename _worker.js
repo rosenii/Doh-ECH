@@ -19,8 +19,8 @@
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';
-const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
+const UPSTREAM_DNS_CUSTOM = 'https://dns.nextdns.io/c745e5';//自行更换为自己nextdns配置id
+const UPSTREAM_JSON_CUSTOM = 'https://dns.nextdns.io/c745e5';
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 const BUILTIN_HINTS = [
     {
