@@ -584,24 +584,10 @@ function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
 }
 
 function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
-    const keyOrder = {
-        'mandatory': 0,
-        'alpn': 1,
-        'no-default-alpn': 2,
-        'port': 3,
-        'ipv4hint': 4,
-        'ech': 5,
-        'ipv6hint': 6
-    };
+    const keyOrder = { alpn: 1, ipv4hint: 4, ech: 5, ipv6hint: 6 };
     const map = new Map();
-    const booleanKeys = new Set(['no-default-alpn']);
     for (const p of params) {
-        // 不再过滤 port，保留上游合法参数
-        if (p.key && p.val !== undefined) {
-            if (p.val !== '' || booleanKeys.has(p.key)) {
-                map.set(p.key, p.val);
-            }
-        }
+        if (p.key && p.val !== undefined && p.val !== '') map.set(p.key, p.val);
     }
     if (ipv4Hints.length > 0) map.set('ipv4hint', ipv4Hints.join(','));
     else map.delete('ipv4hint');
