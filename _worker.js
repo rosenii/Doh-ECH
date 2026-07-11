@@ -588,7 +588,7 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
         'mandatory': 0,
         'alpn': 1,
         'no-default-alpn': 2,
-        'port': 3,               // 保留定义，但后面会过滤掉
+        'port': 3,
         'ipv4hint': 4,
         'ech': 5,
         'ipv6hint': 6
@@ -596,7 +596,7 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
     const map = new Map();
     const booleanKeys = new Set(['no-default-alpn']);
     for (const p of params) {
-        if (p.key === 'port') continue;   // 丢弃任何残留的 port 参数
+        // 不再过滤 port，保留上游合法参数
         if (p.key && p.val !== undefined) {
             if (p.val !== '' || booleanKeys.has(p.key)) {
                 map.set(p.key, p.val);
@@ -611,7 +611,6 @@ function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
     const sortedKeys = Array.from(map.keys()).sort((a, b) => (keyOrder[a] || 999) - (keyOrder[b] || 999));
     return sortedKeys.map(k => ({ key: k, val: map.get(k) }));
 }
-
 // ===================== 假名 ECH 响应 =====================
 async function buildFakeEchResponse(config, domain, clientIP, isCF) {
     const owner = isCF ? 'CF' : 'META';
@@ -828,20 +827,19 @@ function packHttpsParams(priority, target, params) {
  */
 function encodeSvcParam(key, value) {
     const ids = {
-        'mandatory': 0,          // 新增，RFC 9460 标准
+        'port': 3,               // 必须保留，否则上游合法 port 会被丢弃导致整个记录失败
         'alpn': 1,
         'no-default-alpn': 2,    // 新增
-        'port': 3,               // 仅作为占位，我们不会主动使用它
+        'mandatory': 0,          // 新增
         'ipv4hint': 4,
         'ech': 5,
         'ipv6hint': 6
     };
     const id = ids[key];
-    if (id === undefined) return null;   // 未知参数（如上游非法 port）自动丢弃
+    if (id === undefined) return null;
     let valBuf;
 
-    // 新增：mandatory 编码（与 alpn 相同，都是字符串列表）
-    if (key === 'mandatory') {
+    if (key === 'mandatory') {   // 新增分支
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
         let o = 0;
@@ -849,13 +847,9 @@ function encodeSvcParam(key, value) {
             valBuf[o++] = p.length;
             for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    }
-    // 新增：no-default-alpn 布尔型空值
-    else if (key === 'no-default-alpn') {
+    } else if (key === 'no-default-alpn') {   // 新增分支
         valBuf = new Uint8Array(0);
-    }
-    // 原有 alpn 分支
-    else if (key === 'alpn') {
+    } else if (key === 'alpn') {   // 原有分支
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
         let o = 0;
@@ -863,9 +857,11 @@ function encodeSvcParam(key, value) {
             valBuf[o++] = p.length;
             for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    }
-    // 原有 ipv4hint 分支
-    else if (key === 'ipv4hint') {
+    } else if (key === 'port') {   // 原有分支（修复后保留）
+        const portNum = parseInt(value, 10) || 443;
+        valBuf = new Uint8Array(2);
+        new DataView(valBuf.buffer).setUint16(0, portNum);
+    } else if (key === 'ipv4hint') {   // 原有分支
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.length * 4);
         let offset = 0;
@@ -874,9 +870,7 @@ function encodeSvcParam(key, value) {
             valBuf.set(bytes, offset);
             offset += 4;
         }
-    }
-    // 原有 ipv6hint 分支
-    else if (key === 'ipv6hint') {
+    } else if (key === 'ipv6hint') {   // 原有分支
         const parts = value.split(',');
         valBuf = new Uint8Array(parts.length * 16);
         let offset = 0;
@@ -885,17 +879,12 @@ function encodeSvcParam(key, value) {
             valBuf.set(bytes, offset);
             offset += 16;
         }
-    }
-    // 原有 ech 分支
-    else {
+    } else {   // 原有 ech 分支
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
-        } catch (e) {
-            console.error('encodeSvcParam base64 error:', e);
-            return null;
-        }
+        } catch (e) { return null; }
     }
 
     const res = new Uint8Array(4 + valBuf.length);
