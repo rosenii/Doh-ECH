@@ -826,67 +826,46 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    const ids = {
-        'port': 3,               // 必须保留，否则上游合法 port 会被丢弃导致整个记录失败
-        'alpn': 1,
-        'no-default-alpn': 2,    // 新增
-        'mandatory': 0,          // 新增
-        'ipv4hint': 4,
-        'ech': 5,
-        'ipv6hint': 6
-    };
+    const ids = { 'alpn': 1, 'ech': 5, 'ipv4hint': 4, 'ipv6hint': 6 };
     const id = ids[key];
-    if (id === undefined) return null;
+    if (!id) return null;
     let valBuf;
-
-    if (key === 'mandatory') {   // 新增分支
+    if (key === 'alpn' || key === 'ipv4hint' || key === 'ipv6hint') {
         const parts = value.split(',');
-        valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
-        let o = 0;
-        for (const p of parts) {
-            valBuf[o++] = p.length;
-            for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
+        if (key === 'alpn') {
+            valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
+            let o = 0;
+            for (const p of parts) {
+                valBuf[o++] = p.length;
+                for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
+            }
+        } else if (key === 'ipv4hint') {
+            valBuf = new Uint8Array(parts.length * 4);
+            let offset = 0;
+            for (const ip of parts) {
+                const bytes = ipToBytes(ip.trim());
+                valBuf.set(bytes, offset);
+                offset += 4;
+            }
+        } else if (key === 'ipv6hint') {
+            valBuf = new Uint8Array(parts.length * 16);
+            let offset = 0;
+            for (const ip of parts) {
+                const bytes = ipv6ToBytes(ip.trim());
+                valBuf.set(bytes, offset);
+                offset += 16;
+            }
         }
-    } else if (key === 'no-default-alpn') {   // 新增分支
-        valBuf = new Uint8Array(0);
-    } else if (key === 'alpn') {   // 原有分支
-        const parts = value.split(',');
-        valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
-        let o = 0;
-        for (const p of parts) {
-            valBuf[o++] = p.length;
-            for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
-        }
-    } else if (key === 'port') {   // 原有分支（修复后保留）
-        const portNum = parseInt(value, 10) || 443;
-        valBuf = new Uint8Array(2);
-        new DataView(valBuf.buffer).setUint16(0, portNum);
-    } else if (key === 'ipv4hint') {   // 原有分支
-        const parts = value.split(',');
-        valBuf = new Uint8Array(parts.length * 4);
-        let offset = 0;
-        for (const ip of parts) {
-            const bytes = ipToBytes(ip.trim());
-            valBuf.set(bytes, offset);
-            offset += 4;
-        }
-    } else if (key === 'ipv6hint') {   // 原有分支
-        const parts = value.split(',');
-        valBuf = new Uint8Array(parts.length * 16);
-        let offset = 0;
-        for (const ip of parts) {
-            const bytes = ipv6ToBytes(ip.trim());
-            valBuf.set(bytes, offset);
-            offset += 16;
-        }
-    } else {   // 原有 ech 分支
+    } else {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
-        } catch (e) { return null; }
+        } catch (e) {
+            console.error('encodeSvcParam base64 error:', e);
+            return null;
+        }
     }
-
     const res = new Uint8Array(4 + valBuf.length);
     const v = new DataView(res.buffer);
     v.setUint16(0, id);
@@ -894,27 +873,7 @@ function encodeSvcParam(key, value) {
     res.set(valBuf, 4);
     return res;
 }
-/**
- * 解析 DNS 报文头部与问题域
- */
-function parseDnsPacket(buf) {
-    const v = new DataView(buf);
-    if (buf.byteLength < 12) return null;
-    let offset = 12;
-    const labels = [];
-    while (offset < buf.byteLength) {
-        const len = v.getUint8(offset);
-        if (len === 0) { offset++; break; }
-        if ((len & 0xC0) === 0xC0) { offset += 2; break; }
-        offset++;
-        labels.push(new TextDecoder().decode(buf.slice(offset, offset + len)));
-        offset += len;
-    }
-    return {
-        id: v.getUint16(0),
-        questions: [{ name: labels.join('.'), type: v.getUint16(offset) }]
-    };
-}
+
 
 /**
  * 构造多答案 DNS 响应报文
