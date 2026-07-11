@@ -18,25 +18,9 @@
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';
-const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
-
-const CF_STATIC_DOMAINS = [
-    "twimg.com", "twitter.com", "x.com", "t.co",
-    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"
-];
-const DEFAULT_CF_IP = "104.18.10.118";
-const DEFAULT_CF_IP6 = "";
-
-const META_DOMAINS = [
-    "facebook.com", "messenger.com", "instagram.com",
-    "whatsapp.com", "fb.com", "meta.com"
-];
-const DEFAULT_META_IP = "157.240.1.35";
-
+const UPSTREAM_DNS_CUSTOM = 'https://dns.google/dns-query';
+const UPSTREAM_JSON_CUSTOM = 'https://dns.google/resolve';
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
-const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";
-
 const BUILTIN_HINTS = [
     {
         domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
@@ -59,6 +43,20 @@ const BUILTIN_HINTS = [
     // 传统简单写法仍可混用（自动转换）
    //   ["*.googlevideo.com"] // 等价于 { domains: ["*.googlevideo.com"], ips: [], noA: false, noAAAA: false }
 ];
+const CF_STATIC_DOMAINS = [
+    "twimg.com", "twitter.com", "x.com", "t.co",
+    "cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"
+];
+const DEFAULT_CF_IP = "104.18.10.118";
+const DEFAULT_CF_IP6 = "";
+const META_DOMAINS = [
+    "facebook.com", "messenger.com", "instagram.com",
+    "whatsapp.com", "fb.com", "meta.com"
+];
+const DEFAULT_META_IP = "157.240.1.35";
+
+
+const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";
 const RAW_META_CIDRS = [
 '31.13.24.0/21','31.13.64.0/18','45.64.40.0/22','57.141.0.0/24','57.141.2.0/23','57.141.4.0/22','57.141.8.0/21','57.141.16.0/23','57.144.0.0/14','66.220.144.0/20','69.63.176.0/20','69.171.224.0/19','74.119.76.0/22','102.132.96.0/20','102.132.112.0/24','102.132.114.0/23','102.132.116.0/23','102.132.119.0/24','102.132.120.0/23','102.132.123.0/24','102.132.125.0/24','102.132.126.0/23','102.221.188.0/22','103.4.96.0/22','129.134.0.0/17','129.134.130.0/24','129.134.135.0/24','129.134.136.0/22','129.134.140.0/24','129.134.143.0/24','129.134.144.0/24','129.134.147.0/24','129.134.148.0/23','129.134.154.0/23','129.134.156.0/22','129.134.160.0/22','129.134.164.0/23','129.134.168.0/21','129.134.176.0/20','129.134.194.0/24','157.240.0.0/17','157.240.128.0/23','157.240.131.0/24','157.240.132.0/24','157.240.134.0/24','157.240.136.0/23','157.240.139.0/24','157.240.156.0/23','157.240.159.0/24','157.240.169.0/24','157.240.175.0/24','157.240.177.0/24','157.240.179.0/24','157.240.181.0/24','157.240.182.0/23','157.240.184.0/21','157.240.192.0/18','163.70.128.0/17','163.77.132.0/23','163.77.136.0/23','163.114.128.0/20','173.252.64.0/18','179.60.192.0/22','185.60.216.0/22','185.89.216.0/22','199.201.64.0/22','204.15.20.0/22','2620:0:1c00::/40','2620:10d:c090::/44','2a03:2880::/32','2a03:2887:ff00::/48','2a03:2887:ff02::/48','2a03:2887:ff04::/46','2a03:2887:ff09::/48','2a03:2887:ff0a::/48','2a03:2887:ff1b::/48','2a03:2887:ff1c::/48','2a03:2887:ff1e::/48','2a03:2887:ff20::/48','2a03:2887:ff22::/47','2a03:2887:ff27::/48','2a03:2887:ff28::/46','2a03:2887:ff2f::/48','2a03:2887:ff30::/48','2a03:2887:ff33::/48','2a03:2887:ff37::/48','2a03:2887:ff38::/46','2a03:2887:ff3f::/48','2a03:2887:ff40::/46','2a03:2887:ff44::/47','2a03:2887:ff48::/46','2a03:2887:ff4d::/48','2a03:2887:ff4e::/47','2a03:2887:ff50::/45','2a03:2887:ff58::/47','2a03:2887:ff5a::/48','2a03:2887:ff5f::/48','2a03:2887:ff60::/48','2a03:2887:ff62::/47','2a03:2887:ff64::/46','2a03:2887:ff68::/47','2a03:2887:ff6a::/48','2a03:2887:ff70::/47','2c0f:ef78:3::/48','2c0f:ef78:5::/48','2c0f:ef78:9::/48','2c0f:ef78:c::/47','2c0f:ef78:e::/48','2c0f:ef78:10::/47'
 ];
@@ -305,7 +303,7 @@ if (type === 'A' || type === 'AAAA') {
         if (data?.Answer) {
             const rec = data.Answer.find(r => r.type === 65);
             if (rec) {
-                const parsed = parseHttpsRecordFull(rec.data);   // 在第二部分
+                const parsed = parseHttpsRecordFull(rec.data);  
                 if (parsed) {
                     result.ech = parsed.ech || null;
                     if (parsed.ipv4hints && parsed.ipv4hints.length > 0) result.ipv4hints = parsed.ipv4hints;
@@ -456,7 +454,7 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
     ipv4 = [...new Set(ipv4)].slice(0, 6);
     ipv6 = [...new Set(ipv6)].slice(0, 6);
     if (config.shuffle !== 'false') {
-        ipv4 = shuffle(ipv4);   // shuffle 在第二部分
+        ipv4 = shuffle(ipv4);   
         ipv6 = shuffle(ipv6);
     }
     return { ipv4, ipv6 };
@@ -1780,7 +1778,7 @@ function getHtml() {
         <div id="result" class="result-box" style="display: none;"></div>
         <div class="footer">
             <span>DoH-ECH · Cloudflare Pages · </span>
-            <a href="https://github.com/rosenii" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/rosenii/doh-ech" target="_blank" rel="noopener noreferrer">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                     <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                 </svg>
