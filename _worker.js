@@ -818,24 +818,32 @@ function encodeSvcParam(key, value) {
     if (id === undefined) return null;
     let valBuf;
 
-    // mandatory：SvcParamKey 编号列表（uint16 数组）
+    // mandatory：排序、去重、安全处理
     if (key === 'mandatory') {
-        const parts = value.split(',').map(s => s.trim());
-        valBuf = new Uint8Array(parts.length * 2);
+        const keys = [...new Set(
+            value.split(',')
+                .map(s => s.trim())
+                .filter(Boolean)
+                .map(k => SVC_PARAM_IDS[k])
+                .filter(v => v !== undefined)
+        )].sort((a, b) => a - b);
+
+        if (keys.length === 0) return null;
+        valBuf = new Uint8Array(keys.length * 2);
         const dv = new DataView(valBuf.buffer);
-        parts.forEach((p, i) => {
-            if (!(p in SVC_PARAM_IDS)) throw new Error(`Unknown mandatory key: ${p}`);
-            dv.setUint16(i * 2, SVC_PARAM_IDS[p]);
-        });
+        keys.forEach((id, i) => dv.setUint16(i * 2, id));
     }
     // no-default-alpn：空值
     else if (key === 'no-default-alpn') {
         valBuf = new Uint8Array(0);
     }
-    // alpn：字符串列表编码（原始逻辑）
+    // alpn：字符串列表编码，增加长度限制
     else if (key === 'alpn') {
         const parts = value.split(',').map(s => s.trim()).filter(s => s);
         if (parts.length === 0) return null;
+        for (const p of parts) {
+            if (p.length > 255) return null; // 标识长度不得超过 255 字节
+        }
         valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
         let o = 0;
         for (const p of parts) {
@@ -843,14 +851,14 @@ function encodeSvcParam(key, value) {
             for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
     }
-    // port：严格校验（不提供默认值）
+    // port：严格校验
     else if (key === 'port') {
         const portNum = Number(value);
         if (!Number.isInteger(portNum) || portNum < 0 || portNum > 65535) return null;
         valBuf = new Uint8Array(2);
         new DataView(valBuf.buffer).setUint16(0, portNum);
     }
-    // ipv4hint（原始逻辑）
+    // ipv4hint
     else if (key === 'ipv4hint') {
         const parts = value.split(',').map(s => s.trim()).filter(s => s);
         if (parts.length === 0) return null;
@@ -863,7 +871,7 @@ function encodeSvcParam(key, value) {
             offset += 4;
         }
     }
-    // ipv6hint（原始逻辑）
+    // ipv6hint
     else if (key === 'ipv6hint') {
         const parts = value.split(',').map(s => s.trim()).filter(s => s);
         if (parts.length === 0) return null;
@@ -876,10 +884,12 @@ function encodeSvcParam(key, value) {
             offset += 16;
         }
     }
-    // ech 等 Base64（原始逻辑）
+    // ech 等 Base64URL 字段，增加填充处理
     else {
         try {
-            const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
+            let b64 = value.replace(/-/g, '+').replace(/_/g, '/');
+            while (b64.length % 4) b64 += '=';   // 补齐 padding
+            const s = atob(b64);
             valBuf = new Uint8Array(s.length);
             for (let i = 0; i < s.length; i++) valBuf[i] = s.charCodeAt(i);
         } catch (e) {
