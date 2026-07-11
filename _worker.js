@@ -20,6 +20,15 @@ const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
 const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';
 const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
+const SVC_PARAM_IDS = {
+    mandatory: 0,
+    alpn: 1,
+    "no-default-alpn": 2,
+    port: 3,
+    ipv4hint: 4,
+    ech: 5,
+    ipv6hint: 6
+};
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 const BUILTIN_HINTS = [
     {
@@ -400,6 +409,7 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
     if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
 
     const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
+    injectEnhanceDefaults(finalParams);
     return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
 }
 
@@ -561,17 +571,34 @@ function buildHttpsRecordFromParams(domain, params, ipv4Hints, ipv6Hints) {
 }
 
 function sortAndDedupeParams(params, ipv4Hints, ipv6Hints) {
-    const keyOrder = { alpn: 1, ipv4hint: 4, ech: 5, ipv6hint: 6 };
+    const keyOrder = {
+        mandatory: SVC_PARAM_IDS.mandatory,
+        alpn: SVC_PARAM_IDS.alpn,
+        "no-default-alpn": SVC_PARAM_IDS["no-default-alpn"],
+        port: SVC_PARAM_IDS.port,
+        ipv4hint: SVC_PARAM_IDS.ipv4hint,
+        ech: SVC_PARAM_IDS.ech,
+        ipv6hint: SVC_PARAM_IDS.ipv6hint
+    };
     const map = new Map();
+    const booleanKeys = new Set(['no-default-alpn']);
+
     for (const p of params) {
-        if (p.key && p.val !== undefined && p.val !== '') map.set(p.key, p.val);
+        if (p.key && p.val !== undefined) {
+            if (p.val !== '' || booleanKeys.has(p.key)) {
+                map.set(p.key, p.val);
+            }
+        }
     }
+
     if (ipv4Hints.length > 0) map.set('ipv4hint', ipv4Hints.join(','));
     else map.delete('ipv4hint');
     if (ipv6Hints.length > 0) map.set('ipv6hint', ipv6Hints.join(','));
     else map.delete('ipv6hint');
 
-    const sortedKeys = Array.from(map.keys()).sort((a, b) => (keyOrder[a] || 999) - (keyOrder[b] || 999));
+    const sortedKeys = Array.from(map.keys()).sort(
+        (a, b) => (keyOrder[a] ?? 999) - (keyOrder[b] ?? 999)
+    );
     return sortedKeys.map(k => ({ key: k, val: map.get(k) }));
 }
 
@@ -608,6 +635,12 @@ function parseIpList(raw, doShuffle = true) {
     }
     if (doShuffle) return shuffle(arr);
     return arr;
+}
+
+function injectEnhanceDefaults(params) {
+    const existingKeys = new Set(params.map(p => p.key));
+    if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: 'alpn' });
+    if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
 }
 
 /**
@@ -783,37 +816,70 @@ function packHttpsParams(priority, target, params) {
  * 编码 SVCB 参数
  */
 function encodeSvcParam(key, value) {
-    const ids = { 'alpn': 1, 'ech': 5, 'ipv4hint': 4, 'ipv6hint': 6 };
-    const id = ids[key];
-    if (!id) return null;
+    const id = SVC_PARAM_IDS[key];
+    if (id === undefined) return null;
     let valBuf;
-    if (key === 'alpn' || key === 'ipv4hint' || key === 'ipv6hint') {
-        const parts = value.split(',');
-        if (key === 'alpn') {
-            valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
-            let o = 0;
-            for (const p of parts) {
-                valBuf[o++] = p.length;
-                for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
-            }
-        } else if (key === 'ipv4hint') {
-            valBuf = new Uint8Array(parts.length * 4);
-            let offset = 0;
-            for (const ip of parts) {
-                const bytes = ipToBytes(ip.trim());
-                valBuf.set(bytes, offset);
-                offset += 4;
-            }
-        } else if (key === 'ipv6hint') {
-            valBuf = new Uint8Array(parts.length * 16);
-            let offset = 0;
-            for (const ip of parts) {
-                const bytes = ipv6ToBytes(ip.trim());
-                valBuf.set(bytes, offset);
-                offset += 16;
-            }
+
+    // mandatory：SvcParamKey 编号列表（uint16 数组）
+    if (key === 'mandatory') {
+        const parts = value.split(',').map(s => s.trim());
+        valBuf = new Uint8Array(parts.length * 2);
+        const dv = new DataView(valBuf.buffer);
+        parts.forEach((p, i) => {
+            if (!(p in SVC_PARAM_IDS)) throw new Error(`Unknown mandatory key: ${p}`);
+            dv.setUint16(i * 2, SVC_PARAM_IDS[p]);
+        });
+    }
+    // no-default-alpn：空值
+    else if (key === 'no-default-alpn') {
+        valBuf = new Uint8Array(0);
+    }
+    // alpn：字符串列表编码（原始逻辑）
+    else if (key === 'alpn') {
+        const parts = value.split(',').map(s => s.trim()).filter(s => s);
+        if (parts.length === 0) return null;
+        valBuf = new Uint8Array(parts.reduce((a, b) => a + b.length + 1, 0));
+        let o = 0;
+        for (const p of parts) {
+            valBuf[o++] = p.length;
+            for (let i = 0; i < p.length; i++) valBuf[o++] = p.charCodeAt(i);
         }
-    } else {
+    }
+    // port：严格校验（不提供默认值）
+    else if (key === 'port') {
+        const portNum = Number(value);
+        if (!Number.isInteger(portNum) || portNum < 0 || portNum > 65535) return null;
+        valBuf = new Uint8Array(2);
+        new DataView(valBuf.buffer).setUint16(0, portNum);
+    }
+    // ipv4hint（原始逻辑）
+    else if (key === 'ipv4hint') {
+        const parts = value.split(',').map(s => s.trim()).filter(s => s);
+        if (parts.length === 0) return null;
+        valBuf = new Uint8Array(parts.length * 4);
+        let offset = 0;
+        for (const ip of parts) {
+            const bytes = ipToBytes(ip);
+            if (!bytes) return null;
+            valBuf.set(bytes, offset);
+            offset += 4;
+        }
+    }
+    // ipv6hint（原始逻辑）
+    else if (key === 'ipv6hint') {
+        const parts = value.split(',').map(s => s.trim()).filter(s => s);
+        if (parts.length === 0) return null;
+        valBuf = new Uint8Array(parts.length * 16);
+        let offset = 0;
+        for (const ip of parts) {
+            const bytes = ipv6ToBytes(ip);
+            if (!bytes) return null;
+            valBuf.set(bytes, offset);
+            offset += 16;
+        }
+    }
+    // ech 等 Base64（原始逻辑）
+    else {
         try {
             const s = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
             valBuf = new Uint8Array(s.length);
@@ -823,14 +889,14 @@ function encodeSvcParam(key, value) {
             return null;
         }
     }
+
     const res = new Uint8Array(4 + valBuf.length);
-    const v = new DataView(res.buffer);
-    v.setUint16(0, id);
-    v.setUint16(2, valBuf.length);
+    const dv = new DataView(res.buffer);
+    dv.setUint16(0, id);
+    dv.setUint16(2, valBuf.length);
     res.set(valBuf, 4);
     return res;
 }
-
 /**
  * 域名编码为 DNS 标签格式
  */
