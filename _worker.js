@@ -1,19 +1,19 @@
 /**
  * DOH-ECH 
  * - 双上游竞速 + Edge 缓存
- *- CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
+ * - CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
  * - HTTPS hints 复用归属探测 IP
- * - best参数 控制全局跟随优选，所有CF站点均使用配置的优选结果 默认false
- * - clientIp参数 ECS支持，默认自动获取
- * - cf参数 解析优选域名的ip记录返回
- * - sub参数  CF优选订阅，格式 ip-https://ip.txt, cf-https://domain.txt
- * - exclude参数 过滤排除不合适的优选ip/domain
- * - shuffle 参数 返回记录随机乱序开关 默认true
- * - area 参数   返回订阅列表指定区域的ip记录 格式： hk,sg,电信,移动,us
- * - enhance (off/rule/full)
- * - alpn ［h3,h2］
- * - rules *domain1,*domain2:ip1,ip2-noA-noAAAA
+ * - best 控制全局跟随优选，所有CF站点均使用配置的优选结果 默认false
+ * - clientIp ECS支持，默认自动获取
+ * - cf 解析优选域名的ip记录返回
+ * - sub  CF优选订阅，格式 ip-https://ip.txt, cf-https://domain.txt
+ * - exclude 过滤排除不合适的优选ip/domain
+ * - shuffle  返回记录随机乱序开关 默认true
+ * - area    返回订阅列表指定区域的ip记录 格式： hk,sg,电信,移动,us
  * - no6  全局屏蔽AAAA记录 默认false
+ * - enhance (off/rule/full),rule：按rules参数规则返回,full:为所有非CF/Meta站点开启
+ * *  - alpn ［h3］非CF/META站点-仅在enhance开启时生效 | CF/META站点-全局生效
+ * *  - rules   仅在enhance开启时生效, 传参格式：*domain1,*domain2:ip1,ip2-noA-noAAAA,按rules参数规则为指定域名返回alpn仅h3 的HTTPS记录和优选可达的iphints 以及按规则决定是否屏蔽A/AAAA记录
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -41,7 +41,7 @@ const BUILTIN_HINTS = [
     {
         domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
         ips: ["2001:4860:4827:7700:abcd:ef01:2345:6789","2001:4860:4827:7700:1357:2468:369a:48bf","2001:4860:4827:7700:f001:f002:f003:f004","2001:4860:4827:7700:0000:abcd:1234:5679","2001:4860:4827:7700:1411:1222:3343:4144","2001:4860:4827:7700:64:22:33:44"],
-        noA: true,
+       // noA: true,
         noAAAA: false
     },
     {
