@@ -495,12 +495,34 @@ function getBuiltinRulesMap() {
     }
     return builtinRulesMap;
 }
+
 function matchRule(domain, config) {
-    const merged = new Map(getBuiltinRulesMap());
+    const merged = new Map();
+
+    // 先加载内置规则
+    for (const [k, v] of Object.entries(BUILTIN_HINTS)) {
+        merged.set(k, normalizeRuleValue(v));
+    }
+
+    // 用户规则追加 / 覆盖
     if (config.rules) {
         const user = parseRules(config.rules);
-        for (const [k, v] of user) merged.set(k, v);
+        for (const [k, userRule] of user) {
+            if (merged.has(k)) {
+                const builtinRule = merged.get(k);
+                merged.set(k, {
+                    // 标志：用户覆盖内置
+                    noA: userRule.noA !== undefined ? userRule.noA : builtinRule.noA,
+                    noAAAA: userRule.noAAAA !== undefined ? userRule.noAAAA : builtinRule.noAAAA,
+                    // IP 列表：合并去重，用户 IP 放在前面（优先）
+                    ips: [...new Set([...userRule.ips, ...builtinRule.ips])]
+                });
+            } else {
+                merged.set(k, userRule);
+            }
+        }
     }
+
     const matched = [];
     for (const [pattern, ruleObj] of merged) {
         if (matchDomainPattern(domain, pattern)) {
@@ -512,6 +534,17 @@ function matchRule(domain, config) {
     return matched[0].ruleObj;
 }
 
+// 辅助函数：统一内置规则格式
+function normalizeRuleValue(val) {
+    if (Array.isArray(val)) {
+        return { ips: val, noA: false, noAAAA: false };
+    }
+    return {
+        ips: val.ips || [],
+        noA: val.noA || false,
+        noAAAA: val.noAAAA || false
+    };
+}
 function matchDomainPattern(domain, pattern) {
     if (pattern.startsWith('*.')) {
         const suffix = pattern.substring(1);
