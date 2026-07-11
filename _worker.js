@@ -14,6 +14,7 @@
  * - enhance (off/rule/full),rule：按rules参数规则返回,full:为所有非CF/Meta站点开启
  * *  - alpn ［h3］非CF/META站点-仅在enhance开启时生效 | CF/META站点-全局生效
  * *  - rules   仅在enhance开启时生效, 传参格式：*domain1,*domain2:ip1,ip2-noA-noAAAA,按rules参数规则为指定域名返回alpn仅h3 的HTTPS记录和优选可达的iphints 以及按规则决定是否屏蔽A/AAAA记录
+ * *  - mandatory 指定浏览器必须理解的HTTPS参数，否则忽略整条记录
  */
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
@@ -97,7 +98,8 @@ function buildConfig(url, headers = null) {
         area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'off',
         rules: get('rules', 'X-Rules'), alpn: get('alpn', 'X-Alpn') || 'h3,h2',
         clientIp: get('clientIp', 'X-Client-IP'),
-        no6: get('no6', 'X-No6') || 'false',   // 新增，全局屏蔽 AAAA 
+        no6: get('no6', 'X-No6') || 'false',   // 新增，全局屏蔽 AAAA ,
+        mandatory: get('mandatory', 'X-Mandatory') || 'alpn'
     };
 }
 
@@ -407,7 +409,7 @@ async function buildEnhancedHttpsRecord(domain, config, clientIP) {
     if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
 
     const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
-    injectEnhanceDefaults(finalParams);
+    injectEnhanceDefaults(finalParams, config.mandatory || 'alpn');
     return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
 }
 
@@ -635,9 +637,9 @@ function parseIpList(raw, doShuffle = true) {
     return arr;
 }
 
-function injectEnhanceDefaults(params) {
+function injectEnhanceDefaults(params, mandatoryValue) {
     const existingKeys = new Set(params.map(p => p.key));
-    if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: 'alpn' });
+    if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: mandatoryValue || 'alpn' });
     if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
 }
 
