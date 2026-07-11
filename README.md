@@ -43,7 +43,24 @@
 | `no6` |  全局屏蔽AAAA记录 |默认 `false`     |``|
 
 
-
+```ClientIP自动获取逻辑
+客户端
+  │
+  │ DoH 请求
+  ▼
+Cloudflare Edge
+  │
+  │ 注入 CF-Connecting-IP
+  ▼
+Cloudflare Worker
+  │
+  │ 读取 CF-Connecting-IP
+  ▼
+构造 EDNS Client Subnet (ECS)
+  │
+  ▼
+上游 DNS（Google Public DNS 等）
+```
 ---
 ## Enhance Mode 功能与使用
 增强模式是 DoH-ECH 的一项高级功能，允许您为**非 Cloudflare/Meta 域名**（普通网站）主动注入连接优化参数，例如强制 QUIC (HTTP/3)、提供自定义 IP 提示 (IP hints) 以及精确屏蔽 A/AAAA 记录。这不仅能加速网站访问，还能解决某些浏览器因协议偏好导致的连接失败问题。
