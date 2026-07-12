@@ -30,24 +30,30 @@ const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 const BUILTIN_HINTS = [
     {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录
-        domains: ["*.google.com", "*.google.com.hk", "*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com", "*.recaptcha.net"],
+        domains: ["*.google.com"],
         // 包含香港 GWS 落地业务节点以及 8 个核心 GWS 号段大段（支持后 64 位 BigInt 动态随机化混淆）
-        ips: ["2404:6800:400b:c00e::/64", "2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
+        ips: [ "2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
         noA: true,   noAAAA: false// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
       
+    },
+    {
+        //人机验证和账户安全登录
+        domains: [ "*.google.com.hk", "*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com", "*.recaptcha.net"],
+        ips: [],
+        noA: true,   noAAAA: false// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
     },
     {
         // GVS (Google Video Server) 分类组：专属于 YouTube 视频和音频大文件切片流媒体分发
         domains: ["*.googlevideo.com", "*.youtube.com", "*.youtube-nocookie.com"],
         // 包含美西核心号段以及亚太（香港/台湾）大带宽视频流加速号段
-        ips: ["2607:f8b0:4005:80b::/64", "2607:f8b0:4005:80b::/64", "2404:6800:4004:817::/64", "2404:6800:4004:81e::/64"],
+        ips: [],
         noA: true,  noAAAA: false   
     },
     {
         // GGC (Google Global Cache) 分类组：专门分流并加速网页样式、Web 字体、浏览器更新及视频封面等静态资源
         domains: ["*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com"],
         // 包含美西静态号段、亚太次级边缘及全球大容量静态缓存泛播备份号段
-        ips: ["2607:f8b0:4005:817::/64", "2607:f8b0:4005:817::/64", "2404:6800:4008:c01::/64", "2404:6800:4008:c06::/64", "2a00:1450:4001:802::/64"],
+        ips: [],
         noA: true,  noAAAA: false      
     },
     {  
@@ -64,7 +70,7 @@ const BUILTIN_HINTS = [
     },
     //FastlyCDN优化(禁用ipv6)
     { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
-    { domains: ["*.github.com", "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: ["185.199.108.133", "185.199.109.133", "185.199.110.133", "185.199.111.133"], noA: false, noAAAA: true },
+    { domains: ["*.github.com", "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: [], noA: false, noAAAA: true },
     { domains: ["*.imgur.com", "*.i.imgur.com", "*.api.imgur.com", "*.s.imgur.com"], ips: ["151.101.1.193", "151.101.65.193", "151.101.129.193", "151.101.193.193"], noA: false, noAAAA: true },
     { domains: ["*.giphy.com", "*.media.giphy.com", "*.giphy.gif", "*.api.giphy.com"], ips: ["151.101.1.132", "151.101.65.132", "151.101.129.132", "151.101.193.132"], noA: false, noAAAA: true },
     { domains: ["*.pypi.org", "*.pythonhosted.org", "*.files.pythonhosted.org"], ips: ["151.101.1.223", "151.101.65.223", "151.101.129.223", "151.101.193.223"], noA: false, noAAAA: true },
