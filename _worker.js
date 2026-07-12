@@ -70,7 +70,7 @@ const BUILTIN_HINTS = [
     },
     //FastlyCDN优化(禁用ipv6)
     { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
-    { domains: ["*.github.com", "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: [], noA: false, noAAAA: true },
+    { domains: [ "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: ["185.199.108.133", "185.199.109.133", "185.199.110.133", "185.199.111.133"], noA: false, noAAAA: true },
     { domains: ["*.imgur.com", "*.i.imgur.com", "*.api.imgur.com", "*.s.imgur.com"], ips: ["151.101.1.193", "151.101.65.193", "151.101.129.193", "151.101.193.193"], noA: false, noAAAA: true },
     { domains: ["*.giphy.com", "*.media.giphy.com", "*.giphy.gif", "*.api.giphy.com"], ips: ["151.101.1.132", "151.101.65.132", "151.101.129.132", "151.101.193.132"], noA: false, noAAAA: true },
     { domains: ["*.pypi.org", "*.pythonhosted.org", "*.files.pythonhosted.org"], ips: ["151.101.1.223", "151.101.65.223", "151.101.129.223", "151.101.193.223"], noA: false, noAAAA: true },
