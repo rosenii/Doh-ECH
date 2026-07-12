@@ -1187,7 +1187,7 @@ function randomBigInt(min, max) {
 }
 
 /**
- * BigInt 转压缩 IPv6 字符串（无缝替换版）
+ * BigInt 转压缩 IPv6 字符串
  * 遵循 RFC 5952 标准，精准压缩全零段，规避边缘正则导致的格式隐患
  */
 function bigIntToIPv6(big) {
