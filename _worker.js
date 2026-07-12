@@ -61,7 +61,7 @@ const BUILTIN_HINTS = [
         domains: ["*.wikipedia.org", "*.wikimedia.org", "*.wikibooks.org", "*.wikidata.org"],
         ips: ["2620:0:ccc::/48", "2a02:ec80::/32"],
         noA: true, noAAAA: false
-    }
+    },
     //FastlyCDN优化(禁用ipv6)
     { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
     { domains: ["*.github.com", "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: ["185.199.108.133", "185.199.109.133", "185.199.110.133", "185.199.111.133"], noA: false, noAAAA: true },
