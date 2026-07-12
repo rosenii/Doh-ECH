@@ -29,8 +29,8 @@ const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 //enhance：rule/full下 ：增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽规则优先级也高于全局屏蔽AAAA参数
 const BUILTIN_HINTS = [
  {
-        //人机验证和账户安全登录
-        domains: [ "*.google.com.hk", "*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com", "*.recaptcha.net"],
+        // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录
+        domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com", "*.recaptcha.net"],
         ips: ["2404:6800:400b:c00e::/64", "2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
         noA: true,   noAAAA: false// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
     },
