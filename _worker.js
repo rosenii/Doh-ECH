@@ -575,7 +575,7 @@ function getBuiltinRulesMap() {
 function matchRule(domain, config) {
    
     const merged = new Map(getBuiltinRulesMap());
-    for(const[key,rule] of merged){  ips = ips.flatMap(ip => ip.includes('/') ? getPrefixIPs(ip) : [ip]); }
+    for(const[key,rule] of merged){  rule.ips = ips.flatMap(ip => ip.includes('/') ? getPrefixIPs(ip) : [ip]); }
     if (config.rules) {
         const user = parseRules(config.rules);
         for (const [k, v] of user) merged.set(k, v);
