@@ -19,14 +19,14 @@
 // ===================== 全局配置 =====================
 const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
-const UPSTREAM_DNS_CUSTOM = 'https://dns.nextdns.io/c745e5';//自行更换为自己nextdns配置id
-const UPSTREAM_JSON_CUSTOM = 'https://dns.nextdns.io/c745e5';
+const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';//自行更换
+const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 const BUILTIN_HINTS = [
     {
         domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
         ips: ["2001:4860:4827:7700:abcd:ef01:2345:6789","2001:4860:4827:7700:1357:2468:369a:48bf","2001:4860:4827:7700:f001:f002:f003:f004","2001:4860:4827:7700:0000:abcd:1234:5679","2001:4860:4827:7700:1411:1222:3343:4144","2001:4860:4827:7700:64:22:33:44"],
-        noA: true,
+       // noA: true,
         noAAAA: false
     },
     {
@@ -97,7 +97,7 @@ function buildConfig(url, headers = null) {
         exclude: get('exclude', 'X-Exclude'), shuffle: get('shuffle', 'X-Shuffle') || 'true',
         area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'off',
         rules: get('rules', 'X-Rules'), alpn: get('alpn', 'X-Alpn') || 'h3,h2',
-        clientIp: get('clientIp', 'X-Client-IP'),
+        clientIp: get('clientIp', 'X-ClientIP') || '1.2.4.8',
         no6: get('no6', 'X-No6') || 'false',   // 新增，全局屏蔽 AAAA ,
         mandatory: get('mandatory', 'X-Mandatory') || 'alpn'
     };
@@ -107,7 +107,7 @@ function buildConfig(url, headers = null) {
 export default {
     async fetch(req, env, ctx) {
         const url = new URL(req.url);
-        const clientIP = url.searchParams.get('clientIp') || req.headers.get('X-Client-IP') || req.headers.get('CF-Connecting-IP') || '';
+        const clientIP = url.searchParams.get('clientIp') || req.headers.get('X-ClientIP') || req.headers.get('CF-Connecting-IP') || '1.2.4.8';
         if (url.pathname === '/api/query') return handleApiQuery(url, clientIP);
         if (url.pathname === '/ech') return handleDoHRequest(req, true, ctx, clientIP);
         if (url.pathname === '/doh') return handleDoHRequest(req, false, ctx, clientIP);
