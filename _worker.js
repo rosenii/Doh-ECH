@@ -91,12 +91,16 @@ const CN_DOMAIN_SUFFIXES = [ '.cn', '.com.cn', '.net.cn', '.org.cn', '.gov.cn'];
 // ===================== 缓存逻辑 =====================
 let cnDomainSet = null;
 let cnDomainLastFetch = 0;
-const CN_DOMAIN_CACHE_TTL = 3 * 24 * 3600 * 1000;   // 3 天更新一次
+const CN_DOMAIN_CACHE_TTL = 3 * 24 * 3600 * 1000;   // 每3 天更新CN列表
 const cacheMap = new Map();
 const CACHE_TTL = 3600 * 1000;
 const ECH_CACHE_TTL = 3600 * 1000;
 const SUB_CACHE_TTL = 10800 * 1000;
 const subCache = new Map();
+const RANDOM_IPV6_COUNT = 2;                  // 每个前缀生成 2 个随机 IP
+const PREFIX_CACHE_TTL = 5 * 60 * 1000;       // 前缀缓存 5 分钟
+const prefixCache = new Map();
+
 
 // 延迟编译 CIDR 
 let compiledMeta = null, compiledCF = null;
@@ -140,7 +144,7 @@ async function handleDoHRequest(req, injectEch, ctx, clientIP) {
     const url = new URL(req.url);
     const config = buildConfig(url, req.headers);
     if (!config.clientIp) config.clientIp = clientIP;
-    await applySubConfig(config);   // applySubConfig 在第二部分
+    await applySubConfig(config);   
 
     if (req.method === 'POST') {
         const buf = await req.arrayBuffer();
@@ -576,10 +580,14 @@ function parseRules(rulesStr) {
 
         if (dashIdx === -1) {
             ips = rest.split(',').map(s => s.trim()).filter(s => s);
+            ips = ips.flatMap(ip => ip.includes('/') ? getPrefixIPs(ip) : [ip]); 
         } else {
             const ipPart = rest.substring(0, dashIdx).trim();
             const flagPart = rest.substring(dashIdx + 1).trim();
-            if (ipPart) ips = ipPart.split(',').map(s => s.trim()).filter(s => s);
+            if (ipPart) {
+                ips = ipPart.split(',').map(s => s.trim()).filter(s => s);
+                ips = ips.flatMap(ip => ip.includes('/') ? getPrefixIPs(ip) : [ip]); 
+            }
             if (flagPart) {
                 flagPart.split('-').map(s => s.trim().toLowerCase()).forEach(f => {
                     if (f === 'noa' || f === 'noaaaa') flags.add(f);
@@ -1125,6 +1133,104 @@ async function handleCNDomain(domain, type, config, clientIP) {
     const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
     return { domain, type, answers, ech: null };
     }
+/**
+ * 从 IPv6 前缀生成指定数量的随机 IPv6 地址
+ * @param {string} prefixStr - 前缀字符串，如 "2001:4860:4827:7700::/64"
+ * @returns {string[]} 随机 IPv6 地址数组
+ */
+function generateRandomIPv6(prefixStr) {
+    const [addrStr, bitsStr] = prefixStr.split('/');
+    const prefixLen = parseInt(bitsStr, 10);
+    if (isNaN(prefixLen) || prefixLen < 0 || prefixLen > 128) return [];
+
+    // 将前缀地址转换为 128 位 BigInt
+    const baseIP = ipv6ToBigInt(addrStr);
+    const hostBits = 128 - prefixLen;
+    const maxHost = (1n << BigInt(hostBits)) - 1n;
+
+    // 主机位不能全0（网络地址）和全1（广播地址），实际 Google 全段可用，这里保守过滤
+    const minHost = 1n;
+    const maxValidHost = maxHost - 1n;
+
+    const ips = [];
+    for (let i = 0; i < RANDOM_IPV6_COUNT; i++) {
+        const randomHost = randomBigInt(minHost, maxValidHost);
+        const fullIP = baseIP | randomHost;
+        ips.push(bigIntToIPv6(fullIP));
+    }
+    return ips;
+}
+
+/**
+ * 生成介于 min 和 max 之间的随机 BigInt（包含两端）
+ */
+function randomBigInt(min, max) {
+    const range = max - min + 1n;
+    const bits = range.toString(2).length;
+    let rand;
+    const maxAttempts = 10; // 防止无限循环
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        rand = 0n;
+        for (let i = 0; i < 16; i++) {
+            rand = (rand << 8n) | BigInt(bytes[i]);
+        }
+        const mask = (1n << BigInt(bits)) - 1n;
+        rand = rand & mask;
+        if (rand <= range) {
+            return min + rand;
+        }
+    }
+    // 回退：返回 min
+    return min;
+}
+
+/**
+ * BigInt 转压缩 IPv6 字符串
+ */
+function bigIntToIPv6(big) {
+    const parts = [];
+    for (let i = 0; i < 8; i++) {
+        parts.unshift((big & 0xFFFFn).toString(16));
+        big >>= 16n;
+    }
+    // 压缩最长全零段
+    let longestStart = -1, longestLen = 0;
+    let currentStart = -1, currentLen = 0;
+    for (let i = 0; i < parts.length; i++) {
+        if (parts[i] === '0') {
+            if (currentStart === -1) currentStart = i;
+            currentLen++;
+            if (currentLen > longestLen) {
+                longestLen = currentLen;
+                longestStart = currentStart;
+            }
+        } else {
+            currentStart = -1;
+            currentLen = 0;
+        }
+    }
+    if (longestLen > 1) {
+        parts.splice(longestStart, longestLen, '');
+        if (longestStart === 0) parts.unshift('');
+        if (longestStart + longestLen === 8) parts.push('');
+    }
+    return parts.join(':').replace(/:{3,}/, '::');
+}
+
+/**
+ * 获取前缀对应的随机 IP 列表（带缓存）
+ */
+function getPrefixIPs(prefixStr) {
+    const cached = prefixCache.get(prefixStr);
+    if (cached && Date.now() < cached.expire) {
+        return cached.ips;
+    }
+    const ips = generateRandomIPv6(prefixStr);
+    prefixCache.set(prefixStr, { ips, expire: Date.now() + PREFIX_CACHE_TTL });
+    return ips;
+}
 
 // ===================== IP 转换 =====================
 function extractIpsFromPacket(buffer) {
