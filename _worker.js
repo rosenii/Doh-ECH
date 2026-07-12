@@ -23,30 +23,55 @@ const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
 const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';//自行更换
 const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
-
 //只支持ipv4的CF/META域名列表：不返回AAAA记录和ipv6hint
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 
 //enhance：rule/full下 ：增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽规则优先级也高于全局屏蔽AAAA参数
 const BUILTIN_HINTS = [
     {
-        domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
-        ips: ["2001:4860:4827:7700:abcd:ef01:2345:6789","2001:4860:4827:7700:1357:2468:369a:48bf","2001:4860:4827:7700:f001:f002:f003:f004","2001:4860:4827:7700:0000:abcd:1234:5679","2001:4860:4827:7700:1411:1222:3343:4144","2001:4860:4827:7700:64:22:33:44"],
-        noA: true,
-        noAAAA: false
+        // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录
+        domains: ["*.google.com", "*.google.com.hk", "*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com", "*.recaptcha.net"],
+        // 包含香港 GWS 落地业务节点以及 8 个核心 GWS 号段大段（支持后 64 位 BigInt 动态随机化混淆）
+        ips: ["2404:6800:400b:c00e::/64", "2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
+        noA: true,   noAAAA: false// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
+      
     },
     {
-        domains: ["*.reddit.com"],
-        ips: ["151.101.1.140", "151.101.65.140"],
-        noA: false,
-        noAAAA: true
+        // GVS (Google Video Server) 分类组：专属于 YouTube 视频和音频大文件切片流媒体分发
+        domains: ["*.googlevideo.com", "*.youtube.com", "*.youtube-nocookie.com"],
+        // 包含美西核心号段以及亚太（香港/台湾）大带宽视频流加速号段
+        ips: ["2607:f8b0:4005:80b::/64", "2607:f8b0:4005:80b::/64", "2404:6800:4004:817::/64", "2404:6800:4004:81e::/64"],
+        noA: true,  noAAAA: false   
     },
     {
-        domains: ["*.googlevideo.com"],//
-        ips: [],        
-        noA: true,//屏蔽被墙的A记录
-        noAAAA: false
-    },    
+        // GGC (Google Global Cache) 分类组：专门分流并加速网页样式、Web 字体、浏览器更新及视频封面等静态资源
+        domains: ["*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com"],
+        // 包含美西静态号段、亚太次级边缘及全球大容量静态缓存泛播备份号段
+        ips: ["2607:f8b0:4005:817::/64", "2607:f8b0:4005:817::/64", "2404:6800:4008:c01::/64", "2404:6800:4008:c06::/64", "2a00:1450:4001:802::/64"],
+        noA: true,  noAAAA: false      
+    },
+    {  
+        // Meta 全家桶（Instagram、Threads、Facebook 等）[此规则高于Meta优选ip]
+        domains: ["*.facebook.com", "*.instagram.com", "*.cdninstagram.com", "*.fbcdn.net", "*.threads.net"],
+        ips: ["2a03:2880::/32"],
+        noA: true, noAAAA: false
+    },
+    {
+        // Wikipedia 维基百科（全球最大的百科知识库，其通用任播边缘全面部署了支持 HTTP/3 的 ATS 架构）
+        domains: ["*.wikipedia.org", "*.wikimedia.org", "*.wikibooks.org", "*.wikidata.org"],
+        ips: ["2620:0:ccc::/48", "2a02:ec80::/32"],
+        noA: true, noAAAA: false
+    }
+    //FastlyCDN优化
+    { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
+    { domains: ["*.github.com", "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: ["185.199.108.133", "185.199.109.133", "185.199.110.133", "185.199.111.133"], noA: false, noAAAA: true },
+    { domains: ["*.imgur.com", "*.i.imgur.com", "*.api.imgur.com", "*.s.imgur.com"], ips: ["151.101.1.193", "151.101.65.193", "151.101.129.193", "151.101.193.193"], noA: false, noAAAA: true },
+    { domains: ["*.giphy.com", "*.media.giphy.com", "*.giphy.gif", "*.api.giphy.com"], ips: ["151.101.1.132", "151.101.65.132", "151.101.129.132", "151.101.193.132"], noA: false, noAAAA: true },
+    { domains: ["*.pypi.org", "*.pythonhosted.org", "*.files.pythonhosted.org"], ips: ["151.101.1.223", "151.101.65.223", "151.101.129.223", "151.101.193.223"], noA: false, noAAAA: true },
+    { domains: ["*.stackoverflow.com", "*.stackexchange.com", "*.sstatic.net"], ips: ["151.101.1.69", "151.101.65.69", "151.101.129.69", "151.101.193.69"], noA: false, noAAAA: true },
+    { domains: ["*.duckduckgo.com", "*.ddg.gg", "*.icons.duckduckgo.com"], ips: ["151.101.1.181", "151.101.65.181", "151.101.129.181", "151.101.193.181"], noA: false, noAAAA: true },
+    { domains: ["*.medium.com", "*.readmedium.com", "*.miro.medium.com"], ips: ["151.101.1.162", "151.101.65.162", "151.101.129.162", "151.101.193.162"], noA: false, noAAAA: true },
+    { domains: ["*.pinterest.com", "*.pinimg.com", "*.pinterest.io", "*.media.pinterest.com"], ips: ["151.101.1.84", "151.101.65.84", "151.101.129.84", "151.101.193.84"], noA: false, noAAAA: true }
     // 传统简单写法仍可混用（自动转换）
    //   ["*.googlevideo.com"] // 等价于 { domains: ["*.googlevideo.com"], ips: [], noA: false, noAAAA: false }
 ];
