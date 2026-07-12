@@ -54,7 +54,7 @@ const META_DOMAINS = [
     "facebook.com", "messenger.com", "instagram.com",
     "whatsapp.com", "fb.com", "meta.com"
 ];
-const DEFAULT_META_IP = "";
+const DEFAULT_META_IP = "157.240.17.35";
 const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";
 
 const RAW_META_CIDRS = [
