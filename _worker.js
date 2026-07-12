@@ -234,7 +234,7 @@ async function handleApiQuery(url, clientIP) {
 async function resolveDNS(domain, type, config, clientIP) {
     domain = domain.toLowerCase().replace(/\.$/, '');
     // 国内域名分流：直接返回国内上游原始解析结果
-    await ensureCNDomainSet();
+    ensureCNDomainSet();
     if (isCNDomain(domain)) {
         return await handleCNDomain(domain, type, config, clientIP);
     }
@@ -1041,35 +1041,68 @@ function dnsResponse(buffer) {
         headers: { 'Content-Type': 'application/dns-message', 'Access-Control-Allow-Origin': '*' }
     });
 }
-// 加载/更新国内域名集合
+
+/**
+ * 加载/更新国内域名集合
+ * 第一次调用时立即用内置后缀构建集合，后续异步拉取远程列表，不阻塞请求。
+ */
 async function ensureCNDomainSet() {
-    if (cnDomainSet && (Date.now() - cnDomainLastFetch) < CN_DOMAIN_CACHE_TTL) return;
-    const domains = new Set(CN_DOMAIN_SUFFIXES);
+    // 已有有效缓存，直接返回
+    if (cnDomainSet && (Date.now() - cnDomainLastFetch) < CN_DOMAIN_CACHE_TTL) {
+        return;
+    }
+
+    // 如果集合为空，先用内置后缀创建临时集合，保证匹配立即可用
+    if (!cnDomainSet) {
+        cnDomainSet = new Set(CN_DOMAIN_SUFFIXES);
+        cnDomainLastFetch = 0; // 标记为需要更新
+    }
+
+    // 异步下载最新列表（不阻塞当前调用者）
     try {
         const res = await fetch(CN_DOMAIN_LIST_URL);
         if (res.ok) {
+            const domains = new Set(CN_DOMAIN_SUFFIXES); // 内置后缀始终包含
             const text = await res.text();
             for (const line of text.split(/\r?\n/)) {
                 const d = line.trim();
-                if (d && !d.startsWith('#')) domains.add(d);
+                if (d && !d.startsWith('#')) {
+                    domains.add(d);
+                }
             }
+            cnDomainSet = domains;
+            cnDomainLastFetch = Date.now();
         }
-    } catch (e) {}
-    cnDomainSet = domains;
-    cnDomainLastFetch = Date.now();
+    } catch (e) {
+        // 远程加载失败，继续使用现有集合（临时内置集合或上次缓存）
+        // 更新时间戳，避免短时间内重复尝试
+        cnDomainLastFetch = Date.now();
+    }
 }
 
-// 判断国内域名
+/**
+ * 判断是否为国内域名
+ * 匹配规则：完整域名在集合中，或域名以集合中某个 '.' 开头的后缀结尾。
+ */
 function isCNDomain(domain) {
-    if (!cnDomainSet) return false;
+    // cnDomainSet 在 ensureCNDomainSet 中已保证非空，直接使用
     if (cnDomainSet.has(domain)) return true;
     for (const item of cnDomainSet) {
-        if (item.startsWith('.') && domain.endsWith(item)) return true;
+        if (item.startsWith('.') && domain.endsWith(item)) {
+            return true;
+        }
     }
     return false;
 }
 
-// 处理国内域名（直接查阿里 DNS）
+/**
+ * 国内域名处理：直接查询阿里 DNS 并返回原始记录，不做任何修改。
+ * @param {string} domain - 查询域名
+ * @param {string} type - 查询类型 (A/AAAA/HTTPS)
+ * @param {object} config - 当前请求配置
+ * @param {string} clientIP - 客户端 IP（用于 ECS）
+ * @returns {object} 与 resolveDNS 相同的返回结构
+ */
 async function handleCNDomain(domain, type, config, clientIP) {
     const dnsType = type === 'AAAA' ? 28 : (type === 'HTTPS' ? 65 : 1);
     const data = await queryUpstreamDNS(domain, dnsType, clientIP, UPSTREAM_CN_JSON);
@@ -1089,10 +1122,10 @@ async function handleCNDomain(domain, type, config, clientIP) {
         }
         return result;
     }
-
     const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
     return { domain, type, answers, ech: null };
-}
+    }
+
 // ===================== IP 转换 =====================
 function extractIpsFromPacket(buffer) {
     const ips = [];
