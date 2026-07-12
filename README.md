@@ -42,7 +42,7 @@
 | `alpn` |  alpn列表 |默认 `h3,h2`     |``|
 | `no6` |  全局屏蔽AAAA记录 |默认 `false`     |``|
 
-> **ClientIP自动获取逻辑**
+> **ClientIP自动获取逻辑：部分客户端DNS请求获取不到CF-Connecting-IP，请主动填入clientIp**
 ```
 客户端
   │
