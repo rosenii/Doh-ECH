@@ -237,60 +237,53 @@ async function resolveDNS(domain, type, config, clientIP) {
         else if (realOwner === 'META') effectiveMeta = true;
     }
 
-// A/AAAA 处理
+// A/AAAA 处理    
 if (type === 'A' || type === 'AAAA') {
-    
-    //1.全局屏蔽AAAA
+    // 全局 IPv6 屏蔽 (no6) 对静态域名也生效
     if (type === 'AAAA' && config.no6 === 'true') {
-    const isEnhanceActive = config.enhance === 'rule' || config.enhance === 'full';
-    const isStatic = effectiveCF || effectiveMeta;
-    if (isEnhanceActive && !isStatic) {
-        const ruleObj = matchRule(domain, config);
-        // 规则匹配且未要求屏蔽 AAAA，或规则中提供了 IPv6 地址 → 放行
-        if (ruleObj && (!ruleObj.noAAAA || ruleObj.ips.some(ip => ip.includes(':')))) {
-            // 继续往下正常处理
+        const isEnhanceActive = config.enhance === 'rule' || config.enhance === 'full';
+        if (isEnhanceActive) {
+            const ruleObj = matchRule(domain, config);
+            // 规则匹配且提供了 IPv6 或未屏蔽 AAAA → 放行
+            if (ruleObj && (!ruleObj.noAAAA || ruleObj.ips.some(ip => ip.includes(':')))) {
+                // 继续往下正常处理
+            } else {
+                return { domain, type, answers: [], ech: null };
+            }
         } else {
             return { domain, type, answers: [], ech: null };
         }
-    } else {
-        return { domain, type, answers: [], ech: null };
-      }
-    } 
-    // 2. 增强模式下，如果规则匹配且提供了对应类型的 IP，则直接返回
-    if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
+    }
+    // 增强模式规则屏蔽 / 指定 IP（对所有域名生效，包括静态域名）
+    if (config.enhance === 'rule' || config.enhance === 'full') {
         const ruleObj = matchRule(domain, config);
         if (ruleObj) {
-            let ips = [];
-            if (type === 'A') {
-                ips = ruleObj.ips.filter(ip => !ip.includes(':'));
-            } else {
-                ips = ruleObj.ips.filter(ip => ip.includes(':'));
-            }
-            if (ips.length > 0) {
+            // 规则指定了对应类型的 IP → 直接返回规则 IP
+            if (type === 'A' && ruleObj.ips.some(ip => !ip.includes(':'))) {
+                let ips = ruleObj.ips.filter(ip => !ip.includes(':'));
                 if (config.shuffle !== 'false') ips = shuffle(ips);
                 return { domain, type, answers: ips, ech: null };
             }
-        }
-    }
-    // 3. 增强模式下根据规则屏蔽 A/AAAA 记录
-    if ((config.enhance === 'rule' || config.enhance === 'full') && !(effectiveCF || effectiveMeta)) {
-        const ruleObj = matchRule(domain, config);
-        if (ruleObj) {
+            if (type === 'AAAA' && ruleObj.ips.some(ip => ip.includes(':'))) {
+                let ips = ruleObj.ips.filter(ip => ip.includes(':'));
+                if (config.shuffle !== 'false') ips = shuffle(ips);
+                return { domain, type, answers: ips, ech: null };
+            }
+            // 规则要求屏蔽 → 直接返回空
             if (type === 'A' && ruleObj.noA) return { domain, type, answers: [], ech: null };
             if (type === 'AAAA' && ruleObj.noAAAA) return { domain, type, answers: [], ech: null };
         }
     }
-
-    // 4. 静态域名或上游查询
+    // 静态域名（含 best 提升）的优选 IP
     if (effectiveCF || effectiveMeta) {
         return handleStaticDomain(domain, type, config, effectiveCF, effectiveMeta, clientIP);
     }
+    // 普通域名上游查询
     const dnsType = type === 'AAAA' ? 28 : 1;
     const data = await queryUpstreamDNS(domain, dnsType, clientIP);
     const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
     return { domain, type, answers, ech: null };
-}
-
+    }
     // HTTPS 处理
     if (type === 'HTTPS') {
         // CF/Meta 域名
@@ -368,8 +361,30 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
 // ===================== HTTPS 记录构建 (CF/Meta) =====================
 async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, usePreferredHints) {
     const alpn = config.alpn || 'h3,h2';
-    const source = usePreferredHints ? 'preferred' : 'real';
-    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, isCF ? 'CF' : 'META', source);
+    const owner = isCF ? 'CF' : 'META';
+    let ipv4 = [], ipv6 = [];
+    // 增强模式下，规则优先：直接使用规则 IP 作为 hints
+    if (config.enhance === 'rule' || config.enhance === 'full') {
+        const ruleObj = matchRule(domain, config);
+        if (ruleObj) {
+            if (ruleObj.ips.length > 0) {
+                ipv4 = ruleObj.ips.filter(ip => !ip.includes(':'));
+                ipv6 = ruleObj.ips.filter(ip => ip.includes(':'));
+            }
+            // 如果规则要求屏蔽某类记录，对应 hints 也清空
+            if (ruleObj.noA) ipv4 = [];
+            if (ruleObj.noAAAA) ipv6 = [];
+            // 如果规则既没指定 IP 也没屏蔽，则保持空，后续会走原有逻辑
+        }
+    }
+    // 如果增强模式未开启或规则未匹配，走原有优选/真实逻辑
+    if (ipv4.length === 0 && ipv6.length === 0) {
+        const source = usePreferredHints ? 'preferred' : 'real';
+        const hints = await collectIpHints(domain, config, clientIP, owner, source);
+        ipv4 = hints.ipv4;
+        ipv6 = hints.ipv6;
+    }
+
     const params = [{ key: 'alpn', val: alpn }];
     if (isCF) {
         const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
