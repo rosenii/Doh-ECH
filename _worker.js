@@ -52,7 +52,7 @@ const BUILTIN_HINTS = [
     },
     {  
         // Meta 全家桶(禁用ipv4)（Instagram、Threads、Facebook 等）[此规则高于Meta优选ip]
-        domains: ["*.facebook.com", "*.instagram.com", "*.cdninstagram.com", "*.fbcdn.net", "*.threads.net"],
+        domains: ["*.meta.com","*.facebook.com", "*.instagram.com", "*.cdninstagram.com", "*.fbcdn.net", "*.threads.net"],
         ips: ["2a03:2880::/32"],
         noA: true, noAAAA: false
     },
