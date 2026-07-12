@@ -23,9 +23,11 @@ const UPSTREAM_DNS_GOOGLE = 'https://dns.google/dns-query';
 const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
 const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';//自行更换
 const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
+
+//只支持ipv4的CF/META域名列表：不返回AAAA记录和ipv6hint
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
 
-//enhance：rule/full 增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽规则优先级也高于全局屏蔽AAAA参数
+//enhance：rule/full下 ：增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽规则优先级也高于全局屏蔽AAAA参数
 const BUILTIN_HINTS = [
     {
         domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
