@@ -2,7 +2,9 @@
  * DOH-ECH 
  * - 双上游竞速 + Edge 缓存
  * - CF/Meta 静态域名 + IPv6 + 仅 IPv4 排除
+ * - 增强模式 + 自定义规则
  * - HTTPS hints 复用归属探测 IP
+ *********自定义参数***************
  * - best 控制全局跟随优选，所有CF站点均使用配置的优选结果 默认false
  * - clientIp ECS支持，默认自动获取
  * - cf 解析优选域名的ip记录返回
@@ -22,6 +24,8 @@ const UPSTREAM_JSON_GOOGLE = 'https://dns.google/resolve';
 const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';//自行更换
 const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
 const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co", "twimg.com"];
+
+//enhance：rule/full 增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽规则优先级也高于全局屏蔽AAAA参数
 const BUILTIN_HINTS = [
     {
         domains: ["*.google.com", "*.googleapis.com","*.google.com.hk", "*.googleusercontent.com","*.gstatic.com","*.youtube.com","*.ytimg.com","*.ggpht.com"],
