@@ -78,8 +78,20 @@ const SVC_PARAM_IDS = {
     ech: 5,
     ipv6hint: 6
 };
-// ===================== 第一部分：核心代码 =====================
 
+// 国内上游 DNS（阿里 DNS JSON API，仅用于国内域名）
+const UPSTREAM_CN_JSON = 'https://dns.alidns.com/resolve';
+
+// 第三方维护的国内域名列表
+const CN_DOMAIN_LIST_URL = 'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt';
+
+// 国内域名后备后缀（远程列表加载失败时使用）
+const CN_DOMAIN_SUFFIXES = [ '.cn', '.com.cn', '.net.cn', '.org.cn', '.gov.cn'];
+
+// ===================== 缓存逻辑 =====================
+let cnDomainSet = null;
+let cnDomainLastFetch = 0;
+const CN_DOMAIN_CACHE_TTL = 3 * 24 * 3600 * 1000;   // 3 天更新一次
 const cacheMap = new Map();
 const CACHE_TTL = 3600 * 1000;
 const ECH_CACHE_TTL = 3600 * 1000;
@@ -112,6 +124,8 @@ function buildConfig(url, headers = null) {
 // ===================== Worker 入口 =====================
 export default {
     async fetch(req, env, ctx) {
+        // 异步预热国内域名列表
+        ctx.waitUntil(ensureCNDomainSet());
         const url = new URL(req.url);
         const clientIP = url.searchParams.get('clientIp') || req.headers.get('X-ClientIP') || req.headers.get('CF-Connecting-IP') || '1.2.4.8';
         if (url.pathname === '/api/query') return handleApiQuery(url, clientIP);
@@ -219,6 +233,11 @@ async function handleApiQuery(url, clientIP) {
 // ===================== 核心调度 =====================
 async function resolveDNS(domain, type, config, clientIP) {
     domain = domain.toLowerCase().replace(/\.$/, '');
+    // 国内域名分流：直接返回国内上游原始解析结果
+    await ensureCNDomainSet();
+    if (isCNDomain(domain)) {
+        return await handleCNDomain(domain, type, config, clientIP);
+    }
     const best = config.best === 'true';
 
     const isStaticCF = CF_STATIC_DOMAINS.some(d => domain === d || domain.endsWith("." + d));
@@ -709,7 +728,7 @@ async function resolveDomainToIp(domain, type = 1, clientIP) {
 /**
  * 上游 DNS 查询（带 ECS 支持与 Edge 缓存）
  */
-async function queryUpstreamDNS(name, type, clientIP = '') {
+async function queryUpstreamDNS(name, type, clientIP = '',upstreamUrl = null) {
     const params = new URLSearchParams({ name, type: String(type) });
     let ecsCacheSuffix = '';
     if (clientIP) {
@@ -733,7 +752,10 @@ async function queryUpstreamDNS(name, type, clientIP = '') {
         }
     } catch (e) {}
 
-    const urls = [UPSTREAM_JSON_GOOGLE + '?' + params.toString(), UPSTREAM_JSON_CUSTOM + '?' + params.toString()];
+       // 上游 URL 列表：国内域名仅阿里，国外域名保持 Google + 您的自定义 DNS 竞速
+    const urls = upstreamUrl
+        ? [upstreamUrl + '?' + params.toString()]
+        : [UPSTREAM_JSON_GOOGLE + '?' + params.toString(), UPSTREAM_JSON_CUSTOM + '?' + params.toString()]; 
     const promises = urls.map(url =>
         fetch(url, { headers: { 'Accept': 'application/dns-json' } })
             .then(res => res.ok ? res.json() : Promise.reject())
@@ -1019,7 +1041,58 @@ function dnsResponse(buffer) {
         headers: { 'Content-Type': 'application/dns-message', 'Access-Control-Allow-Origin': '*' }
     });
 }
+// 加载/更新国内域名集合
+async function ensureCNDomainSet() {
+    if (cnDomainSet && (Date.now() - cnDomainLastFetch) < CN_DOMAIN_CACHE_TTL) return;
+    const domains = new Set(CN_DOMAIN_SUFFIXES);
+    try {
+        const res = await fetch(CN_DOMAIN_LIST_URL);
+        if (res.ok) {
+            const text = await res.text();
+            for (const line of text.split(/\r?\n/)) {
+                const d = line.trim();
+                if (d && !d.startsWith('#')) domains.add(d);
+            }
+        }
+    } catch (e) {}
+    cnDomainSet = domains;
+    cnDomainLastFetch = Date.now();
+}
 
+// 判断国内域名
+function isCNDomain(domain) {
+    if (!cnDomainSet) return false;
+    if (cnDomainSet.has(domain)) return true;
+    for (const item of cnDomainSet) {
+        if (item.startsWith('.') && domain.endsWith(item)) return true;
+    }
+    return false;
+}
+
+// 处理国内域名（直接查阿里 DNS）
+async function handleCNDomain(domain, type, config, clientIP) {
+    const dnsType = type === 'AAAA' ? 28 : (type === 'HTTPS' ? 65 : 1);
+    const data = await queryUpstreamDNS(domain, dnsType, clientIP, UPSTREAM_CN_JSON);
+
+    if (type === 'HTTPS') {
+        const result = { domain, type, answers: [] };
+        if (data?.Answer) {
+            const rec = data.Answer.find(r => r.type === 65);
+            if (rec) {
+                const parsed = parseHttpsRecordFull(rec.data);
+                if (parsed) {
+                    result.ech = parsed.ech || null;
+                    result.ipv4hints = parsed.ipv4hints || [];
+                    result.ipv6hints = parsed.ipv6hints || [];
+                }
+            }
+        }
+        return result;
+    }
+
+    const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
+    return { domain, type, answers, ech: null };
+}
 // ===================== IP 转换 =====================
 function extractIpsFromPacket(buffer) {
     const ips = [];
