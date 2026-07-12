@@ -1187,36 +1187,39 @@ function randomBigInt(min, max) {
 }
 
 /**
- * BigInt 转压缩 IPv6 字符串
+ * BigInt 转压缩 IPv6 字符串（无缝替换版）
+ * 遵循 RFC 5952 标准，精准压缩全零段，规避边缘正则导致的格式隐患
  */
 function bigIntToIPv6(big) {
-    const parts = [];
+    const segments = [];
     for (let i = 0; i < 8; i++) {
-        parts.unshift((big & 0xFFFFn).toString(16));
-        big >>= 16n;
+        // 每次向右平移 16 位，并取出最后的 16 位，转换为 16 进制字符串
+        segments.unshift(Number((big >> BigInt(i * 16)) & 0xFFFFn).toString(16));
     }
-    // 压缩最长全零段
-    let longestStart = -1, longestLen = 0;
-    let currentStart = -1, currentLen = 0;
-    for (let i = 0; i < parts.length; i++) {
-        if (parts[i] === '0') {
-            if (currentStart === -1) currentStart = i;
-            currentLen++;
-            if (currentLen > longestLen) {
-                longestLen = currentLen;
-                longestStart = currentStart;
+    // 寻找最长的连续全零段（RFC 5952 标准压缩逻辑）
+    let maxStart = -1, maxLen = 0;
+    let curStart = -1, curLen = 0;
+    for (let i = 0; i < 8; i++) {
+        if (segments[i] === '0') {
+            if (curStart === -1) curStart = i;
+            curLen++;
+            if (curLen > maxLen) {
+                maxLen = curLen;
+                maxStart = curStart;
             }
         } else {
-            currentStart = -1;
-            currentLen = 0;
+            curStart = -1;
+            curLen = 0;
         }
     }
-    if (longestLen > 1) {
-        parts.splice(longestStart, longestLen, '');
-        if (longestStart === 0) parts.unshift('');
-        if (longestStart + longestLen === 8) parts.push('');
-    }
-    return parts.join(':').replace(/:{3,}/, '::');
+    // 只有全零段长度大于 1 时才进行 "::" 压缩
+    if (maxLen > 1) {
+        const head = segments.slice(0, maxStart).join(':');
+        const tail = segments.slice(maxStart + maxLen).join(':');
+        return `${head}::${tail}`;
+    }    
+    // 如果没有连续的零段，则直接用单冒号连接返回
+    return segments.join(':');
 }
 
 /**
