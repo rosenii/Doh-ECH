@@ -436,91 +436,114 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
 
     return { domain, type, answers: ips, ech: null };
 }
-
-// ===================== HTTPS 记录构建 (CF/Meta) =====================
-async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, usePreferredHints) {
+//=====================公共 HTTPS 记录构建函数=====================    
+async function buildHttpsRecord(domain, config, clientIP, options = {}) {
+    const {
+        isCF = false,
+        isMeta = false,
+        usePreferredHints = true,
+        injectECH = false,
+        injectEnhance = false
+    } = options;
     const alpn = config.alpn || 'h3,h2';
-    const owner = isCF ? 'CF' : 'META';
-
+    const owner = isCF ? 'CF' : (isMeta ? 'META' : null);
+    const mode = config.enhance || 'off';
+    const ruleObj = (mode === 'rule' || mode === 'full') ? matchRule(domain, config) : null;
     let ipv4 = [], ipv6 = [];
-    let ruleObj = null;  // 用于屏蔽判断
-
-    // 1. 增强模式规则优先
-    if (config.enhance === 'rule' || config.enhance === 'full') {
-        ruleObj = matchRule(domain, config);
-        if (ruleObj) {
-            // 使用规则中明确提供的 IP
-            if (ruleObj.ips.length > 0) {
-                ipv4 = ruleObj.ips.filter(ip => !ip.includes(':'));
-                ipv6 = ruleObj.ips.filter(ip => ip.includes(':'));
-            }
-            // 规则屏蔽标志强制清空对应 hints
-            if (ruleObj.noA) ipv4 = [];
-            if (ruleObj.noAAAA) ipv6 = [];
+    // 1. 收集 hints（来源：规则 > 静态优选 > 上游兜底）
+    if (ruleObj) {
+        // 规则匹配时，先使用规则 IP
+        if (ruleObj.ips.length > 0) {
+            ipv4 = ruleObj.ips.filter(ip => !ip.includes(':'));
+            ipv6 = ruleObj.ips.filter(ip => ip.includes(':'));
         }
-    }
-
-    // 2. 增强模式未开启或规则未匹配且 hints 全空 → 走原有静态优选/真实逻辑
-    if (ipv4.length === 0 && ipv6.length === 0) {
+        // 如果规则没有提供任何 IP，且是静态域名，则走静态优选
+        else if (owner) {
+            const source = usePreferredHints ? 'preferred' : 'real';
+            const hints = await collectIpHints(domain, config, clientIP, owner, source);
+            ipv4 = hints.ipv4;
+            ipv6 = hints.ipv6;
+        }
+        // 普通域名 + 规则无 IP，hints 保持空，等待后面从上游收集
+    } else if (owner) {
+        // 静态域名无规则匹配，走静态优选
         const source = usePreferredHints ? 'preferred' : 'real';
         const hints = await collectIpHints(domain, config, clientIP, owner, source);
         ipv4 = hints.ipv4;
         ipv6 = hints.ipv6;
+    } else {
+        // 普通域名无规则匹配，从上游收集 hints（增强模式 full）
+        const collected = await collectIpHints(domain, config, clientIP, null, mode);
+        ipv4 = collected.ipv4;
+        ipv6 = collected.ipv6;
     }
-
-    // 3. 安全兜底：如果某类 hints 依然为空且未被屏蔽，从上游获取真实 IP 补充
-    const needRuleObj = ruleObj || (config.enhance === 'rule' || config.enhance === 'full' ? matchRule(domain, config) : null);
-    if (ipv4.length === 0 && !isTypeBlocked('A', needRuleObj, config)) {
+    // 2. 应用屏蔽标志
+    if (isTypeBlocked('A', ruleObj, config)) ipv4 = [];
+    if (isTypeBlocked('AAAA', ruleObj, config)) ipv6 = [];
+    // 3. 安全兜底：未被屏蔽且为空时，从上游获取真实 IP
+    if (ipv4.length === 0 && !isTypeBlocked('A', ruleObj, config)) {
         ipv4 = await resolveRealHints(domain, 1, clientIP);
     }
-    if (ipv6.length === 0 && !isTypeBlocked('AAAA', needRuleObj, config)) {
+    if (ipv6.length === 0 && !isTypeBlocked('AAAA', ruleObj, config)) {
         ipv6 = await resolveRealHints(domain, 28, clientIP);
     }
-
-    // 4. 打包 HTTPS 记录
-    const params = [{ key: 'alpn', val: alpn }];
-    if (isCF) {
-        const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
-        if (ech) params.push({ key: 'ech', val: ech });
-    } else {
-        params.push({ key: 'ech', val: META_ECH_CONFIG });
-    }
-    return buildHttpsRecordFromParams(domain, params, ipv4, ipv6);
-}
-
-// ===================== HTTPS 记录增强 (非CF/Meta) =====================
-async function buildEnhancedHttpsRecord(domain, config, clientIP) {
-    const alpn = config.alpn || 'h3,h2';
-    const mode = config.enhance || 'off';
-    const { ipv4, ipv6 } = await collectIpHints(domain, config, clientIP, null, mode);
-
-    let upstreamParams = [];
-    try {
-        const data = await queryUpstreamDNS(domain, 65, clientIP);
-        if (data?.Answer) {
-            const rec = data.Answer.find(r => r.type === 65);
-            if (rec) {
-                const parsed = parseRawHttpsRecord(rec.data);  // 在第二部分
-                if (parsed) upstreamParams = parsed;
-            }
-        }
-    } catch (e) {}
-
+    // 4. 构建参数列表
     const paramMap = new Map();
-    if (Array.isArray(upstreamParams)) {
-        for (const p of upstreamParams) {
-            if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
-        }
+    // 增强模式或普通域名时，合并上游原始 HTTPS 参数（保留 ech 等）
+    if (!owner || injectEnhance) {
+        try {
+            const data = await queryUpstreamDNS(domain, 65, clientIP);
+            if (data?.Answer) {
+                const rec = data.Answer.find(r => r.type === 65);
+                if (rec) {
+                    const upstreamParams = parseRawHttpsRecord(rec.data);
+                    for (const p of upstreamParams) {
+                        if (p.key && p.val !== undefined) paramMap.set(p.key, p.val);
+                    }
+                }
+            }
+        } catch (e) {}
     }
+    // 5. 注入 ECH（仅 CF/Meta 静态域名）
+    if (injectECH && owner) {
+        const ech = isCF
+            ? await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP)
+            : META_ECH_CONFIG;
+        if (ech) paramMap.set('ech', ech);
+    }
+    // 6. 设置 ALPN 和 hints
     paramMap.set('alpn', alpn);
-    if (ipv4.length) paramMap.set('ipv4hint', ipv4.join(','));
-    if (ipv6.length) paramMap.set('ipv6hint', ipv6.join(','));
+    if (ipv4.length > 0) paramMap.set('ipv4hint', ipv4.join(','));
+    else paramMap.delete('ipv4hint');
+    if (ipv6.length > 0) paramMap.set('ipv6hint', ipv6.join(','));
+    else paramMap.delete('ipv6hint');
 
     const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
-    injectEnhanceDefaults(finalParams, config.mandatory || 'alpn');
-    return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
-}
 
+    // 7. 增强模式下注入默认参数
+    if (injectEnhance) {
+        injectEnhanceDefaults(finalParams, config.mandatory || 'alpn');
+    }
+
+    return buildHttpsRecordFromParams(domain, finalParams, ipv4, ipv6);
+ }
+// ===================== HTTPS 记录构建 (CF/Meta) =====================
+async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, usePreferredHints) {
+    return buildHttpsRecord(domain, config, clientIP, {
+        isCF,
+        isMeta,
+        usePreferredHints,
+        injectECH: true,
+        injectEnhance: false
+    });
+}
+// ===================== HTTPS 记录增强构建(非CF/Meta) =====================
+async function buildEnhancedHttpsRecord(domain, config, clientIP) {
+    return buildHttpsRecord(domain, config, clientIP, {
+        injectECH: false,
+        injectEnhance: true
+    });
+}
 // ===================== 统一 IP hints 收集 =====================
 async function collectIpHints(domain, config, clientIP, owner, source) {
     let ipv4 = [], ipv6 = [];
