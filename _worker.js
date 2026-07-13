@@ -32,7 +32,7 @@ const BUILTIN_HINTS = [
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
         domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.recaptcha.net"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
-        noA: false,
+        noA: true,
         noAAAA: false// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
     },
     {
@@ -45,7 +45,7 @@ const BUILTIN_HINTS = [
         // GGC (Google Global Cache) 分类组：专门分流并加速网页样式、Web 字体、浏览器更新及视频封面等静态资源
         domains: ["*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
-        noA: false,    noAAAA: false      
+        noA: ftrue,    noAAAA: false      
     },
     {  
         // Meta 全家桶(禁用ipv4)（Instagram、Threads、Facebook 等）[此规则高于Meta优选ip]
@@ -56,8 +56,7 @@ const BUILTIN_HINTS = [
     {
         // Wikipedia 维基百科(禁用ipv4)（全球最大的百科知识库，其通用任播边缘全面部署了支持 HTTP/3 的 ATS 架构）
         domains: ["*.wikipedia.org", "*.wikimedia.org", "*.wikibooks.org", "*.wikidata.org"],
-        ips: [],
-        noA: true, noAAAA: false
+        ips: [],  noA: true, noAAAA: false
     },
     //FastlyCDN优化(禁用ipv6)
     { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
