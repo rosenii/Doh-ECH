@@ -493,11 +493,11 @@ async function buildHttpsRecord(domain, config, clientIP, options = {}) {
     paramMap.set('alpn', alpn);
     if (ipv4.length > 0) paramMap.set('ipv4hint', ipv4.join(','));
     else paramMap.delete('ipv4hint');
+    // CF 站点默认禁用 IPv6 hints（可通过 nocf6=false 开启）
+    if (isCF && config.nocf6 !== 'false') {ipv6 = [];}
     if (ipv6.length > 0) paramMap.set('ipv6hint', ipv6.join(','));
     else paramMap.delete('ipv6hint');
-
     const finalParams = Array.from(paramMap, ([k, v]) => ({ key: k, val: v }));
-
     // 7. 增强模式下注入默认参数
     if (injectEnhance) {
         injectEnhanceDefaults(finalParams, config.mandatory || 'alpn');
