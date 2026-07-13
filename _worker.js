@@ -89,7 +89,7 @@ const RAW_CF_CIDRS = ['5.10.214.0/23','5.10.244.0/22','5.175.141.0/24','5.182.84
 // 第三方维护的国内域名列表
 const CN_DOMAIN_LIST_URL = 'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt';
 // 国内域名后备后缀（远程列表加载失败时使用）
-const CN_DOMAIN_SUFFIXES = [ '.cn', '.com.cn', '.net.cn', '.org.cn', '.gov.cn'];
+const CN_DOMAIN_SUFFIXES = ['jd.com','meituan.com','taobao.com', '.cn', '.com.cn', '.net.cn', '.org.cn', '.gov.cn'];
 
 // ===================== 缓存逻辑 =====================
 let cnDomainSet = null;
