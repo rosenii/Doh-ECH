@@ -804,16 +804,23 @@ async function handleLogsRequest() {
         alpn: 'h3,h2 (ALPN 列表)',
         mandatory: 'alpn (强制参数)',
     };
-    // ---------- Worker 运行信息 ----------
+   // ---------- Worker 运行信息 ----------
+    const uptimeSeconds = Math.floor((now - workerStartTime) / 1000);
+    const hours = Math.floor(uptimeSeconds / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const seconds = uptimeSeconds % 60;
+    const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
+
     const runtime = {
-        _description: 'Worker 运行信息',
-        uptime: ((now - workerStartTime) / 1000).toFixed(0) + 's',
-        startedAt: new Date(workerStartTime).toISOString(),
+    _description: 'Worker 运行信息',
+    uptime: uptimeFormatted,
+    startedAt: new Date(workerStartTime).toISOString(),
     };
     // ---------- 内置增强规则 (BUILTIN_HINTS) ----------
     const builtinRules = {};
     for (const [domain, rule] of Object.entries(BUILTIN_HINTS)) {
         builtinRules[domain] = {
+            domains: rule.domains||[],
             ips: rule.ips || (Array.isArray(rule) ? rule : []),
             noA: rule.noA || false,
             noAAAA: rule.noAAAA || false,
