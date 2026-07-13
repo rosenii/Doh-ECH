@@ -87,9 +87,23 @@ Cloudflare Worker
 
 ### 规则格式
 增强模式的核心是**规则**，用于精确指定需要优化的域名及其参数。
+#### 内置增强规则模板 (BUILTIN_HINTS)
+此文档为 `_worker.js` 中 `BUILTIN_HINTS` 常量的配置指南。所有规则均支持通配符 `*`，且可配置 `noA` / `noAAAA` 标志及 IP 列表或 IPv6 前缀。
 
-#### 规则字符串（`rules` 参数）
+```javascript
+const BUILTIN_HINTS = {
+    // 写法一：纯 IPv4 / IPv6 地址列表，无屏蔽
+    "*.example.com": ["1.2.3.4", "2001:db8::1"],
 
+    // 写法二：对象形式，支持屏蔽标志和 IP 列表
+    "*.domain.com": {
+        ips: ["1.2.3.4", "2001:db8::/32"],  // 可使用 IPv6 前缀（/32 等）
+        noA: true,                          // 屏蔽 A 记录（仅 IPv6）
+        noAAAA: false                       // 允许 AAAA 记录
+    }
+};
+```
+#### 通过`rules` 参数或X-Rules请求头参数配置
 - **域名**：必填，支持通配符 `*.`（匹配所有子域及根域）。可逗号分隔多个域名。
 - **IP列表**：可选，多个 IP 用逗号分隔，支持 IPv4/IPv6。留空表示不提供自定义 IP。
 - **标志**：可选，使用 `-` 分隔，支持 `noA`（屏蔽 A 记录）、`noAAAA`（屏蔽 AAAA 记录）。可同时使用。
