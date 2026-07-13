@@ -49,8 +49,8 @@ const BUILTIN_HINTS = [
     },
     {  
         // Meta 全家桶(禁用ipv4)（Instagram、Threads、Facebook 等）[此规则高于Meta优选ip]
-        domains: ["*.meta.com","*.facebook.com", "*.instagram.com", "*.cdninstagram.com", "*.fbcdn.net", "*.threads.net"],
-        ips: ["2a03:2880::/32"],
+        domains: ["*.meta.com","*.facebook.com", "*.fb.com","*.instagram.com", "*.cdninstagram.com", "*.fbcdn.net", "*.threads.net"],
+        ips: [],
         noA: true, noAAAA: false
     },
     {
@@ -90,7 +90,7 @@ const META_DOMAINS = [
     "facebook.com", "messenger.com", "instagram.com",
     "whatsapp.com", "fb.com", "meta.com"
 ];
-const DEFAULT_META_IP = "157.240.17.35";
+const DEFAULT_META_IP = "";
 const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";
 
 const RAW_META_CIDRS = [
