@@ -751,8 +751,8 @@ function parseIpList(raw, doShuffle = true) {
 
 function injectEnhanceDefaults(params, mandatoryValue) {
     const existingKeys = new Set(params.map(p => p.key));
-    if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: mandatoryValue || 'alpn' });
-    if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
+ //   if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: mandatoryValue || 'alpn' });
+  //  if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
 }
 
 /**
