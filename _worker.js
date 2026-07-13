@@ -388,35 +388,47 @@ function cleanResult(result) {
 // ===================== 静态域名 A/AAAA 处理 =====================
 async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) {
     const doShuffle = config.shuffle !== 'false';
+    let ips = [];
+
+    // ----- AAAA 记录 -----
     if (type === 'AAAA') {
         if (isDomainIpv4Only(domain)) return { domain, type, answers: [], ech: null };
-        if (isMeta) return { domain, type, answers: config.metaIp6 ? parseIpList(config.metaIp6, doShuffle) : [], ech: null };
-        let ips = [];
-        if (config.ip6) ips = parseIpList(config.ip6, doShuffle);
-        else if (config.cfDomain) {
-            const resolved = await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle);
-            if (resolved.length > 0) ips = resolved.map(formatIPv6FromBytes);
-        } else ips = parseIpList(DEFAULT_CF_IP6, doShuffle);
-        return { domain, type, answers: ips, ech: null };
+
+        if (isMeta) {
+            ips = config.metaIp6 ? parseIpList(config.metaIp6, doShuffle) : [];
+        } else {
+            // CF
+            if (config.ip6) ips = parseIpList(config.ip6, doShuffle);
+            else if (config.cfDomain) {
+                const resolved = await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle);
+                if (resolved.length > 0) ips = resolved.map(formatIPv6FromBytes);
+            } else ips = parseIpList(DEFAULT_CF_IP6, doShuffle);
+        }
     }
-    // A 记录
-    let ips = [];
-    if (isCF) {
-        if (config.ip4) ips = parseIpList(config.ip4, doShuffle);
-        else if (config.cfDomain) {
-            const resolved = await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle);
-            if (resolved.length > 0) ips = resolved.map(bytesToIp);
-        } else ips = parseIpList(DEFAULT_CF_IP, doShuffle);
-    } else {
-        if (config.metaIp4) ips = parseIpList(config.metaIp4, doShuffle);
-        else if (config.metaDomain) {
-            const resolved = await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle);
-            if (resolved.length > 0) ips = resolved.map(bytesToIp);
-        } else ips = parseIpList(DEFAULT_META_IP, doShuffle);
+
+    // ----- A 记录 -----
+    if (type === 'A') {
+        if (isCF) {
+            if (config.ip4) ips = parseIpList(config.ip4, doShuffle);
+            else if (config.cfDomain) {
+                const resolved = await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle);
+                if (resolved.length > 0) ips = resolved.map(bytesToIp);
+            } else ips = parseIpList(DEFAULT_CF_IP, doShuffle);
+        } else {
+            // Meta
+            if (config.metaIp4) ips = parseIpList(config.metaIp4, doShuffle);
+            else if (config.metaDomain) {
+                const resolved = await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle);
+                if (resolved.length > 0) ips = resolved.map(bytesToIp);
+            } else ips = parseIpList(DEFAULT_META_IP, doShuffle);
+        }
     }
-    // 安全兜底：如果最终 IP 列表为空，并且该类型未被屏蔽，则从上游获取真实记录
+
+    // ----- 通用安全兜底：如果最终 IP 列表为空且未被屏蔽，从上游获取真实记录 -----
     if (ips.length === 0) {
-        const ruleObj = (config.enhance === 'rule' || config.enhance === 'full') ? matchRule(domain, config) : null;
+        const ruleObj = (config.enhance === 'rule' || config.enhance === 'full')
+            ? matchRule(domain, config)
+            : null;
         if (!isTypeBlocked(type, ruleObj, config)) {
             const dnsType = type === 'AAAA' ? 28 : 1;
             const real = await resolveRealHints(domain, dnsType, clientIP);
@@ -425,7 +437,8 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
                 if (doShuffle) ips = shuffle(ips);
             }
         }
-     }
+    }
+
     return { domain, type, answers: ips, ech: null };
 }
 
