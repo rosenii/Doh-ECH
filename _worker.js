@@ -57,7 +57,7 @@ const BUILTIN_HINTS = [
         // Wikipedia 维基百科(禁用ipv4)（全球最大的百科知识库，其通用任播边缘全面部署了支持 HTTP/3 的 ATS 架构）
         domains: ["*.wikipedia.org", "*.wikimedia.org", "*.wikibooks.org", "*.wikidata.org"],
         ips: [],
-        noA: false, noAAAA: false
+        noA: true, noAAAA: false
     },
     //FastlyCDN优化(禁用ipv6)
     { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
