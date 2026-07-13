@@ -414,6 +414,18 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
             if (resolved.length > 0) ips = resolved.map(bytesToIp);
         } else ips = parseIpList(DEFAULT_META_IP, doShuffle);
     }
+    // 安全兜底：如果最终 IP 列表为空，并且该类型未被屏蔽，则从上游获取真实记录
+    if (ips.length === 0) {
+        const ruleObj = (config.enhance === 'rule' || config.enhance === 'full') ? matchRule(domain, config) : null;
+        if (!isTypeBlocked(type, ruleObj, config)) {
+            const dnsType = type === 'AAAA' ? 28 : 1;
+            const real = await resolveRealHints(domain, dnsType, clientIP);
+            if (real.length > 0) {
+                ips = real;
+                if (doShuffle) ips = shuffle(ips);
+            }
+        }
+     }
     return { domain, type, answers: ips, ech: null };
 }
 
@@ -421,22 +433,26 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
 async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, usePreferredHints) {
     const alpn = config.alpn || 'h3,h2';
     const owner = isCF ? 'CF' : 'META';
+
     let ipv4 = [], ipv6 = [];
-    // 增强模式下，规则优先：直接使用规则 IP 作为 hints
+    let ruleObj = null;  // 用于屏蔽判断
+
+    // 1. 增强模式规则优先
     if (config.enhance === 'rule' || config.enhance === 'full') {
-        const ruleObj = matchRule(domain, config);
+        ruleObj = matchRule(domain, config);
         if (ruleObj) {
+            // 使用规则中明确提供的 IP
             if (ruleObj.ips.length > 0) {
                 ipv4 = ruleObj.ips.filter(ip => !ip.includes(':'));
                 ipv6 = ruleObj.ips.filter(ip => ip.includes(':'));
             }
-            // 如果规则要求屏蔽某类记录，对应 hints 也清空
+            // 规则屏蔽标志强制清空对应 hints
             if (ruleObj.noA) ipv4 = [];
             if (ruleObj.noAAAA) ipv6 = [];
-            // 如果规则既没指定 IP 也没屏蔽，则保持空，后续会走原有逻辑
         }
     }
-    // 如果增强模式未开启或规则未匹配，走原有优选/真实逻辑
+
+    // 2. 增强模式未开启或规则未匹配且 hints 全空 → 走原有静态优选/真实逻辑
     if (ipv4.length === 0 && ipv6.length === 0) {
         const source = usePreferredHints ? 'preferred' : 'real';
         const hints = await collectIpHints(domain, config, clientIP, owner, source);
@@ -444,6 +460,16 @@ async function buildStaticHttpsRecord(domain, config, clientIP, isCF, isMeta, us
         ipv6 = hints.ipv6;
     }
 
+    // 3. 安全兜底：如果某类 hints 依然为空且未被屏蔽，从上游获取真实 IP 补充
+    const needRuleObj = ruleObj || (config.enhance === 'rule' || config.enhance === 'full' ? matchRule(domain, config) : null);
+    if (ipv4.length === 0 && !isTypeBlocked('A', needRuleObj, config)) {
+        ipv4 = await resolveRealHints(domain, 1, clientIP);
+    }
+    if (ipv6.length === 0 && !isTypeBlocked('AAAA', needRuleObj, config)) {
+        ipv6 = await resolveRealHints(domain, 28, clientIP);
+    }
+
+    // 4. 打包 HTTPS 记录
     const params = [{ key: 'alpn', val: alpn }];
     if (isCF) {
         const ech = await fetchRealEch(config.echDomain || 'cloudflare-ech.com', clientIP);
@@ -1600,7 +1626,29 @@ function json(data, status = 200) {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 }
+/**
+ * 判断某条 DNS 记录类型（A 或 AAAA）是否被屏蔽
+ * @param {string} type - 'A' 或 'AAAA'
+ * @param {object|null} ruleObj - matchRule 返回的规则对象，未匹配则为 null
+ * @param {object} config - 当前请求配置
+ * @returns {boolean}
+ */
+function isTypeBlocked(type, ruleObj, config) {
+    if (ruleObj) {
+        if (type === 'A' && ruleObj.noA) return true;
+        if (type === 'AAAA') {
+            if (ruleObj.hasOwnProperty('noAAAA')) {
+                return ruleObj.noAAAA;
+            }
+        }
+    }
 
+    if (type === 'AAAA' && config.no6 === 'true') {
+        return true;
+    }
+
+    return false;
+}
 function getHtml() {
     return `<!DOCTYPE html>
 <html lang="zh-CN">
