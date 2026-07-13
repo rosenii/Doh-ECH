@@ -96,7 +96,6 @@ let cnDomainSet = null;
 let cnDomainLastFetch = 0;
 const CN_DOMAIN_CACHE_TTL = 3 * 24 * 3600 * 1000;   // 每3 天更新CN列表
 const cacheMap = new Map();
-const workerStartTime = Date.now();
 const CACHE_TTL = 3600 * 1000;
 const ECH_CACHE_TTL = 3600 * 1000;
 const SUB_CACHE_TTL = 10800 * 1000;
@@ -835,17 +834,17 @@ async function handleLogsRequest() {
     
     const payload = {
         timestamp: new Date(now).toISOString(),
-        _info1: "======================================== Worker 运行信息 (Runtime) ========================================",
+        _info1: "============================= Worker 运行信息 (Runtime) ===================================",
         runtime: runtime,
-        _info2: "========================================国内域名列表 (CN List) ========================================",
+        _info2: "=============================国内域名列表加载 (CN List) =====================================",
         cnList: cnList,
-        _info3: "======================================== 缓存状态 (Cache Status) ========================================",
+        _info3: "=============================缓存状态 (Cache Status) ======================================",
         cacheStatus: cacheStatus,
-        _info4: "======================================== 订阅缓存详情 (Sub Cache) ========================================",
+        _info4: "=============================订阅缓存详情 (Sub Cache)  =====================================",
         subCache: subDetails,
-        _info5: "======================================== 全局参数默认值 (Global Defaults) ========================================",
+        _info5: "=============================全局参数默认值 (Global Defaults) ==============================",
         globalDefaults: globalDefaults,
-        _info6: "======================================== 内置增强规则 (BUILTIN_HINTS) ========================================",
+        _info6: "=============================内置增强规则 (BUILTIN_HINTS) ==================================",
         builtinHints: builtinHints
     };
     return json(payload);
