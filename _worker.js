@@ -123,7 +123,8 @@ function buildConfig(url, headers = null) {
         rules: get('rules', 'X-Rules'), alpn: get('alpn', 'X-Alpn') || 'h3,h2',
         clientIp: get('clientIp', 'X-ClientIP') || '',
         no6: get('no6', 'X-No6') || 'false',   
-        mandatory: get('mandatory', 'X-Mandatory') || 'alpn'
+        mandatory: get('mandatory', 'X-Mandatory') || 'alpn',
+        nocf6: get('nocf6', 'X-NoCF6') || 'true'
     };
 }
 
@@ -270,7 +271,11 @@ async function resolveDNS(domain, type, config, clientIP) {
     }
 // A/AAAA 处理    
     if (type === 'A' || type === 'AAAA') {
-    // 全局 IPv6 屏蔽 (no6) 对静态域名也生效
+     // 独立控制的CF站点禁用IPv6 默认即禁用（可通过 nocf6=false 关闭）
+        if (type === 'AAAA' && config.nocf6 !== 'false' && effectiveCF) {
+           return { domain, type, answers: [], ech: null };
+        }     
+     // 全局 IPv6 屏蔽 (no6) 对静态域名也生效
         if (type === 'AAAA' && config.no6 === 'true') {
             const isEnhanceActive = config.enhance === 'rule' || config.enhance === 'full';
             if (isEnhanceActive) {
