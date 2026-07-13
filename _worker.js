@@ -804,17 +804,18 @@ async function handleLogsRequest() {
         alpn: 'h3,h2 (ALPN 列表)',
         mandatory: 'alpn (强制参数)',
     };
-   // ---------- Worker 运行信息 ----------
-    const uptimeSeconds = Math.floor((now - workerStartTime) / 1000);
+    // ---------- Worker 运行信息 ----------
+    const startedTimestamp = cnDomainLastFetch || Date.now();
+    const uptimeMs = Date.now() - startedTimestamp;
+    const uptimeSeconds = Math.floor(uptimeMs / 1000);
     const hours = Math.floor(uptimeSeconds / 3600);
     const minutes = Math.floor((uptimeSeconds % 3600) / 60);
     const seconds = uptimeSeconds % 60;
     const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
-
     const runtime = {
     _description: 'Worker 运行信息',
     uptime: uptimeFormatted,
-    startedAt: new Date(workerStartTime).toISOString(),
+    startedAt: new Date(startedTimestamp).toISOString(),
     };
     // ---------- 内置增强规则 (BUILTIN_HINTS) ----------
     const builtinRules = {};
@@ -831,14 +832,21 @@ async function handleLogsRequest() {
         rules: builtinRules,
     };
     // ---------- 组装响应 ----------
+    
     const payload = {
         timestamp: new Date(now).toISOString(),
+        _divider0: "==================== Worker 运行信息 (Runtime) ====================",
         runtime: runtime,
+        _divider1: "==================== 国内域名列表 (CN List) ====================",
         cnList: cnList,
+        _divider2: "==================== 缓存状态 (Cache Status) ====================",
         cacheStatus: cacheStatus,
+        _divider3: "==================== 订阅缓存详情 (Sub Cache) ====================",
         subCache: subDetails,
+        _divider4: "==================== 全局参数默认值 (Global Defaults) ====================",
         globalDefaults: globalDefaults,
-        builtinHints: builtinHints,
+        _divider5: "==================== 内置增强规则 (BUILTIN_HINTS) ====================",
+        builtinHints: builtinHints
     };
     return json(payload);
  }
