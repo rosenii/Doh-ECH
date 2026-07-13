@@ -779,8 +779,8 @@ async function handleLogsRequest() {
     // ---------- 缓存状态 ----------
     const echKey = 'ech:cloudflare-ech.com';
     const cacheStatus = {
-        _description: '缓存状态概览',
-        echCache: cacheMap.has(echKey) ? '已预热 (warm)' : '未预热 (cold)',
+        _description: '配置缓存状态概览',
+        echCache: cacheMap.has(echKey) ? 'ECH配置已预热 (warm)' : 'ECH配置未预热 (cold)',
         ownerCacheSize: cacheMap.size,
         subCacheCount: subCache.size,
     };
@@ -826,11 +826,11 @@ async function handleLogsRequest() {
     // ---------- 组装响应 ----------
     const payload = {
         timestamp: new Date(now).toISOString(),
+        runtime: runtime,
         cnList: cnList,
         cacheStatus: cacheStatus,
         subCache: subDetails,
         globalDefaults: globalDefaults,
-        runtime: runtime,
         builtinHints: builtinHints,
     };
     return json(payload);
