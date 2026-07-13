@@ -101,7 +101,7 @@ const ECH_CACHE_TTL = 3600 * 1000;
 const SUB_CACHE_TTL = 10800 * 1000;
 const subCache = new Map();
 const RANDOM_IPV6_COUNT = 2;                  // 每个前缀生成 2 个随机 IP
-const PREFIX_CACHE_TTL = 5 * 60 * 1000;       // 前缀缓存 5 分钟
+const PREFIX_CACHE_TTL = 30 * 60 * 1000;       // 前缀缓存 30 分钟
 const prefixCache = new Map();
 
 // 延迟编译 CIDR 
