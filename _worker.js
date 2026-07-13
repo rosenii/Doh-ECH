@@ -96,6 +96,7 @@ let cnDomainSet = null;
 let cnDomainLastFetch = 0;
 const CN_DOMAIN_CACHE_TTL = 3 * 24 * 3600 * 1000;   // 每3 天更新CN列表
 const cacheMap = new Map();
+const workerStartTime = Date.now();
 const CACHE_TTL = 3600 * 1000;
 const ECH_CACHE_TTL = 3600 * 1000;
 const SUB_CACHE_TTL = 10800 * 1000;
@@ -133,6 +134,7 @@ export default {
         // 异步预热国内域名列表
         ctx.waitUntil(ensureCNDomainSet());
         const url = new URL(req.url);
+        if (url.pathname === '/log') {return handleLogsRequest();}
         const clientIP = url.searchParams.get('clientIp') || req.headers.get('X-ClientIP') || req.headers.get('CF-Connecting-IP') || '1.2.4.8';
         if (url.pathname === '/api/query') return handleApiQuery(url, clientIP);
         if (url.pathname === '/ech') return handleDoHRequest(req, true, ctx, clientIP);
@@ -748,12 +750,91 @@ function parseIpList(raw, doShuffle = true) {
     if (doShuffle) return shuffle(arr);
     return arr;
 }
-
+/**
+ * HTTPS RR 注入参数
+ */
 function injectEnhanceDefaults(params, mandatoryValue) {
     const existingKeys = new Set(params.map(p => p.key));
  //   if (!existingKeys.has('mandatory')) params.push({ key: 'mandatory', val: mandatoryValue || 'alpn' });
   //  if (!existingKeys.has('no-default-alpn')) params.push({ key: 'no-default-alpn', val: '' });
 }
+
+/**
+ * 日志系统
+ */
+async function handleLogsRequest() {
+    await ensureCNDomainSet();
+    const now = Date.now();
+    // ---------- CN 列表状态 ----------
+    const cnList = {
+        _description: '国内域名列表加载状态',
+        domainCount: cnDomainSet ? cnDomainSet.size : 0,
+        lastFetch: cnDomainLastFetch ? new Date(cnDomainLastFetch).toISOString() : null,
+        nextFetchIn: cnDomainLastFetch
+            ? Math.max(0, CN_DOMAIN_CACHE_TTL - (now - cnDomainLastFetch)) / 1000 + 's'
+            : 'expired',
+        sourceUrl: CN_DOMAIN_LIST_URL,
+        ttl: CN_DOMAIN_CACHE_TTL / 1000 / 3600 + '小时',
+    };
+    // ---------- 缓存状态 ----------
+    const echKey = 'ech:cloudflare-ech.com';
+    const cacheStatus = {
+        _description: '缓存状态概览',
+        echCache: cacheMap.has(echKey) ? '已预热 (warm)' : '未预热 (cold)',
+        ownerCacheSize: cacheMap.size,
+        subCacheCount: subCache.size,
+    };
+    // ---------- 订阅缓存详情 ----------
+    const subDetails = [];
+    for (const [url, entry] of subCache.entries()) {
+        subDetails.push({
+            url: url,
+            cachedAt: new Date(entry.expire - SUB_CACHE_TTL).toISOString(),
+            expiresIn: Math.max(0, (entry.expire - now) / 1000).toFixed(0) + 's',
+            contentLength: entry.content ? entry.content.length : 0,
+        });
+    }
+    // ---------- 全局参数默认值 ----------
+    const globalDefaults = {
+        _description: '全局参数默认值',
+        best: 'false (非静态域名跟随优选)',
+        shuffle: 'true (随机乱序 IP)',
+        enhance: 'off (增强模式)',
+        no6: 'false (全局屏蔽 IPv6)',
+        alpn: 'h3,h2 (ALPN 列表)',
+        mandatory: 'alpn (强制参数)',
+    };
+    // ---------- Worker 运行信息 ----------
+    const runtime = {
+        _description: 'Worker 运行信息',
+        uptime: ((now - workerStartTime) / 1000).toFixed(0) + 's',
+        startedAt: new Date(workerStartTime).toISOString(),
+    };
+    // ---------- 内置增强规则 (BUILTIN_HINTS) ----------
+    const builtinRules = {};
+    for (const [domain, rule] of Object.entries(BUILTIN_HINTS)) {
+        builtinRules[domain] = {
+            ips: rule.ips || (Array.isArray(rule) ? rule : []),
+            noA: rule.noA || false,
+            noAAAA: rule.noAAAA || false,
+        };
+    }
+    const builtinHints = {
+        _description: '内置增强规则 (BUILTIN_HINTS)',
+        rules: builtinRules,
+    };
+    // ---------- 组装响应 ----------
+    const payload = {
+        timestamp: new Date(now).toISOString(),
+        cnList: cnList,
+        cacheStatus: cacheStatus,
+        subCache: subDetails,
+        globalDefaults: globalDefaults,
+        runtime: runtime,
+        builtinHints: builtinHints,
+    };
+    return json(payload);
+ }
 
 /**
  * Fisher-Yates 洗牌算法
