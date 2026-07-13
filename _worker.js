@@ -32,7 +32,7 @@ const BUILTIN_HINTS = [
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
         domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.recaptcha.net"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
-       // noA: true,
+        noA: true,
         noAAAA: false// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
     },
     {
@@ -70,8 +70,8 @@ const BUILTIN_HINTS = [
     { domains: ["*.medium.com", "*.readmedium.com", "*.miro.medium.com"], ips: ["151.101.1.162", "151.101.65.162", "151.101.129.162", "151.101.193.162"], noA: false, noAAAA: true },
     { domains: ["*.pinterest.com", "*.pinimg.com", "*.pinterest.io", "*.media.pinterest.com"], ips: ["151.101.1.84", "151.101.65.84", "151.101.129.84", "151.101.193.84"], noA: false, noAAAA: true },
    //Others(禁用ipv4)
- //   { domains: ["*.quic.cloud", "*.quiccloud.org", "*.litespeedtech.com"], ips: ["2a02:4780::/32", "2604:a880::/32"], noA: true, noAAAA: false },
-    { domains: ["*.docker.com", "*.docker.io", "*.production.cloudflare.docker.com"], ips: ["2620:12a:8001::/64", "2620:12a:8000::/64",], noA: true, noAAAA: false }    
+ //   { domains: ["*.quic.cloud", "*.quiccloud.org", "*.litespeedtech.com"], ips: ["2a02:4780::/32", "2604:a880::/32"], noA: false, noAAAA: false },
+    { domains: ["*.docker.com", "*.docker.io", "*.production.cloudflare.docker.com"], ips: [], noA: true, noAAAA: false }    
     // 传统简单写法仍可混用（自动转换）
    //   ["*.googlevideo.com"] // 等价于 { domains: ["*.googlevideo.com"], ips: [], noA: false, noAAAA: false }
 ];
