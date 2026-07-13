@@ -56,7 +56,7 @@ const BUILTIN_HINTS = [
     {
         // Wikipedia 维基百科(禁用ipv4)（全球最大的百科知识库，其通用任播边缘全面部署了支持 HTTP/3 的 ATS 架构）
         domains: ["*.wikipedia.org", "*.wikimedia.org", "*.wikibooks.org", "*.wikidata.org"],
-        ips: ["2620:0:ccc::/48", "2a02:ec80::/32"],
+        ips: ["2a02:ec80:700:ed1a::/64"],
         noA: true, noAAAA: false
     },
     //FastlyCDN优化(禁用ipv6)
@@ -69,14 +69,9 @@ const BUILTIN_HINTS = [
     { domains: ["*.duckduckgo.com", "*.ddg.gg", "*.icons.duckduckgo.com"], ips: ["151.101.1.181", "151.101.65.181", "151.101.129.181", "151.101.193.181"], noA: false, noAAAA: true },
     { domains: ["*.medium.com", "*.readmedium.com", "*.miro.medium.com"], ips: ["151.101.1.162", "151.101.65.162", "151.101.129.162", "151.101.193.162"], noA: false, noAAAA: true },
     { domains: ["*.pinterest.com", "*.pinimg.com", "*.pinterest.io", "*.media.pinterest.com"], ips: ["151.101.1.84", "151.101.65.84", "151.101.129.84", "151.101.193.84"], noA: false, noAAAA: true },
-    //AWS优化(禁用ipv4)
-    { domains: ["*.cloudfront.net", "*.aws", "*.amazon.com", "*.amazonaws.com", "*.media-amazon.com"], ips: ["2600:9000::/32", "2406:da00::/32", "2600:1f00::/32", "2a05:d014::/32"], noA: true, noAAAA: false },
-    { domains: ["*.epicgames.com", "*.unrealengine.com", "*.helpshift.com", "*.ol.epicgames.com"], ips: ["2600:9000::/32", "2406:da00::/32"], noA: true, noAAAA: false },
-    { domains: ["*.slack.com", "*.slack-edge.com", "*.slack-imgs.com", "*.slack-files.com"], ips: ["2600:9000::/32", "2a05:d014::/32"], noA: true, noAAAA: false },
-    { domains: ["*.pinterest.com", "*.api.pinterest.com", "*.ct-pinterest.com"], ips: ["2600:9000::/32", "2600:1f00::/32"], noA: true, noAAAA: false },
-    //Others(禁用ipv4)
-    { domains: ["*.quic.cloud", "*.quiccloud.org", "*.litespeedtech.com"], ips: ["2a02:4780::/32", "2604:a880::/32"], noA: true, noAAAA: false },
-    { domains: ["*.docker.com", "*.docker.io", "*.production.cloudflare.docker.com"], ips: ["2606:4700::/32", "2400:cb00::/32"], noA: true, noAAAA: false }    
+   //Others(禁用ipv4)
+ //   { domains: ["*.quic.cloud", "*.quiccloud.org", "*.litespeedtech.com"], ips: ["2a02:4780::/32", "2604:a880::/32"], noA: true, noAAAA: false },
+    { domains: ["*.docker.com", "*.docker.io", "*.production.cloudflare.docker.com"], ips: ["2620:12a:8001::/64", "2620:12a:8000::/64",], noA: true, noAAAA: false }    
     // 传统简单写法仍可混用（自动转换）
    //   ["*.googlevideo.com"] // 等价于 { domains: ["*.googlevideo.com"], ips: [], noA: false, noAAAA: false }
 ];
