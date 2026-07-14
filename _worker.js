@@ -115,7 +115,7 @@ function getCompiledCF()   { if (!compiledCF)   compiledCF   = compileCidrs(RAW_
 function buildConfig(url, headers = null) {
     const get = (p, h) => (url.searchParams.get(p) || (headers ? headers.get(h) : null)) || '';
    
-    return {
+ const config =  {
         ip4: get('ip4', 'X-Ip4'), ip6: get('ip6', 'X-Ip6'),
         metaIp4: get('metaIp4', 'X-MetaIp4'), metaIp6: get('metaIp6', 'X-MetaIp6'),
         cfDomain: get('cf', 'X-CF'), metaDomain: get('meta', 'X-Meta'),
@@ -129,6 +129,9 @@ function buildConfig(url, headers = null) {
         mandatory: get('mandatory', 'X-Mandatory') || 'alpn',
         nocf6: get('nocf6', 'X-NoCF6') || 'true'
     };
+    config.ip4 = prescreenIpList(config.ip4);//预筛选
+    config.ip6 = prescreenIpList(config.ip6);
+    return config;
 }
 
 // ===================== Worker 入口 =====================
@@ -768,7 +771,7 @@ function parseIpList(raw, doShuffle = true) {
  * 记录预筛选函数
  */
 function prescreenIpList(raw) {
-    if (!raw) return raw;
+    if (!raw) return '';
     const ips = raw.split(',').map(s => s.trim()).filter(s => s);
     if (ips.length <= MAX_PRESCREEN) return raw;
     const shuffled = shuffle([...ips]);
@@ -1692,8 +1695,9 @@ async function applySubConfig(config) {
         }
     }
     if (allIps.size > 0) config.ip4 = Array.from(allIps).join(',');
-    if (allDomains.size > 0) config.cfDomain = Array.from(allDomains).join(',');
     if (config.ip4) config.ip4 = prescreenIpList(config.ip4);
+    if (allDomains.size > 0) config.cfDomain = Array.from(allDomains).join(',');
+  
 }
 
 // ===================== 辅助函数 =====================
