@@ -416,9 +416,9 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
             }
         }
     }
-    if(ips.length > MAXFINAL){
+    if(ips.length > MAX_FINAL){
         if(doShuffle) ips = shuffle([...ips]);
-        ips = ips.slice(0, MAXFINAL);
+        ips = ips.slice(0, MAX_FINAL);
     }
     return { domain, type, answers: ips, ech: null };
 }
@@ -583,8 +583,8 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
         ]);
     }
 
-    ipv4 = [...new Set(ipv4)].slice(0, MAXFINAL);
-    ipv6 = [...new Set(ipv6)].slice(0, MAXFINAL);
+    ipv4 = [...new Set(ipv4)].slice(0, MAX_FINAL);
+    ipv6 = [...new Set(ipv6)].slice(0, MAX_FINAL);
     if (config.shuffle !== 'false') {
         ipv4 = shuffle(ipv4);   
         ipv6 = shuffle(ipv6);
@@ -1023,11 +1023,11 @@ function parseHttpsRecord(dataStr) {
  */
 function packHttpsParamsWithHints(priority, target, params, ipv4Hints, ipv6Hints) {
     if (ipv4Hints && ipv4Hints.length > 0) {
-        const unique = [...new Set(ipv4Hints)].slice(0, MAXFINAL);
+        const unique = [...new Set(ipv4Hints)].slice(0, MAX_FINAL);
         if (unique.length > 0) params.push({ key: 'ipv4hint', val: unique.join(',') });
     }
     if (ipv6Hints && ipv6Hints.length > 0) {
-        const unique = [...new Set(ipv6Hints)].slice(0,MAXFINAL);
+        const unique = [...new Set(ipv6Hints)].slice(0,MAX_FINAL);
         if (unique.length > 0) params.push({ key: 'ipv6hint', val: unique.join(',') });
     }
     return packHttpsParams(priority, target, params);
