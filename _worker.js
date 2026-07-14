@@ -137,8 +137,9 @@ function buildConfig(url, headers = null) {
 // ===================== Worker 入口 =====================
 export default {
     async fetch(req, env, ctx) {
-        // 异步预热国内域名列表
+        // 异步预热国内域名列表和CF ECH配置
         ctx.waitUntil(ensureCNDomainSet());
+        ctx.waitUntil(fetchRealEch('cloudflare-ech.com', ''));
         const url = new URL(req.url);
         if (url.pathname === '/log') {return handleLogsRequest();}
         const clientIP = url.searchParams.get('clientIp') || req.headers.get('X-ClientIP') || req.headers.get('CF-Connecting-IP') || '1.2.4.8';
@@ -862,17 +863,11 @@ async function handleLogsRequest() {
     
     const payload = {
         timestamp: new Date(now).toISOString(),
-        _info1: "============================= Worker 运行信息 (Runtime) ===================================",
         runtime: runtime,
-        _info2: "=============================国内域名列表加载 (CN List) =====================================",
         cnList: cnList,
-        _info3: "=============================缓存状态 (Cache Status) ======================================",
         cacheStatus: cacheStatus,
-        _info4: "=============================订阅缓存详情 (Sub Cache)  =====================================",
         subCache: subDetails,
-        _info5: "=============================全局参数默认值 (Global Defaults) ==============================",
         globalDefaults: globalDefaults,
-        _info6: "=============================内置增强规则 (BUILTIN_HINTS) ==================================",
         builtinHints: builtinHints
     };
     return json(payload);
@@ -990,7 +985,12 @@ async function fetchRealEch(echDomain, clientIP) {
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
     try {
-        const data = await queryUpstreamDNS(echDomain, 65, clientIP);
+          // 首次尝试
+        let data = await queryUpstreamDNS(echDomain, 65, clientIP);
+        if (!data) {// 失败后等待 500ms，再试一次
+            await new Promise(r => setTimeout(r, 500));
+            data = await queryUpstreamDNS(echDomain, 65, clientIP);
+        }
         if (data && data.Answer) {
             const rec = data.Answer.find(r => r.type === 65);
             if (rec) {
@@ -1566,7 +1566,13 @@ async function activeProbeOwner(domain, ctx, clientIP) {
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
     try {
-        const data = await queryUpstreamDNS(domain, 1, clientIP);
+        // 第一次尝试
+        let data = await queryUpstreamDNS(domain, 1, clientIP);   
+        // 如果失败，等待 500ms 后重试一次
+        if (!data || !data.Answer) {
+            await new Promise(r => setTimeout(r, 500));
+            data = await queryUpstreamDNS(domain, 1, clientIP);
+        }
         if (data && data.Answer) {
             const ips = data.Answer.filter(r => r.type === 1).map(r => r.data);
             for (const ip of ips) {
