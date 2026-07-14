@@ -114,8 +114,7 @@ function getCompiledCF()   { if (!compiledCF)   compiledCF   = compileCidrs(RAW_
 // ===================== 参数构建 =====================
 function buildConfig(url, headers = null) {
     const get = (p, h) => (url.searchParams.get(p) || (headers ? headers.get(h) : null)) || '';
-    config.ip4 = prescreenIpList(config.ip4);//预筛选
-    config.ip6 = prescreenIpList(config.ip6);
+   
     return {
         ip4: get('ip4', 'X-Ip4'), ip6: get('ip6', 'X-Ip6'),
         metaIp4: get('metaIp4', 'X-MetaIp4'), metaIp6: get('metaIp6', 'X-MetaIp6'),
@@ -1027,7 +1026,7 @@ function packHttpsParamsWithHints(priority, target, params, ipv4Hints, ipv6Hints
         if (unique.length > 0) params.push({ key: 'ipv4hint', val: unique.join(',') });
     }
     if (ipv6Hints && ipv6Hints.length > 0) {
-        const unique = [...new Set(ipv6Hints)].slice(0,MAX_FINAL);
+        const unique = [...new Set(ipv6Hints)].slice(0, MAX_FINAL);
         if (unique.length > 0) params.push({ key: 'ipv6hint', val: unique.join(',') });
     }
     return packHttpsParams(priority, target, params);
