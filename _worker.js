@@ -899,6 +899,9 @@ async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = t
     }
     const ipArray = Array.from(allIps);
     if (doShuffle) shuffle(ipArray);
+    if(limit >0 && ipArray.length > limit){
+        ipArray = ipArray.slice(0,limit);
+    }
     if (type === 1) return ipArray.map(ipToBytes);
     else return ipArray.map(ipv6ToBytes);
 }
