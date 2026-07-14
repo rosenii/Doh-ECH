@@ -901,7 +901,7 @@ async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = t
             for (const ip of res.value) allIps.add(ip);
         }
     }
-    const ipArray = Array.from(allIps);
+    let ipArray = Array.from(allIps);
     if (doShuffle) shuffle(ipArray);
     if(limit >0 && ipArray.length > limit){
         ipArray = ipArray.slice(0,limit);
