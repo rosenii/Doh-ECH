@@ -378,7 +378,7 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
             // CF
             if (config.ip6) ips = parseIpList(config.ip6, doShuffle);
             else if (config.cfDomain) {
-                const resolved = await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle);
+                const resolved = await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, doShuffle, MAX_PRESCREEN);
                 if (resolved.length > 0) ips = resolved.map(formatIPv6FromBytes);
             } else ips = parseIpList(DEFAULT_CF_IP6, doShuffle);
         }
@@ -389,14 +389,14 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
         if (isCF) {
             if (config.ip4) ips = parseIpList(config.ip4, doShuffle);
             else if (config.cfDomain) {
-                const resolved = await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle);
+                const resolved = await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, doShuffle, MAX_PRESCREEN);
                 if (resolved.length > 0) ips = resolved.map(bytesToIp);
             } else ips = parseIpList(DEFAULT_CF_IP, doShuffle);
         } else {
             // Meta
             if (config.metaIp4) ips = parseIpList(config.metaIp4, doShuffle);
             else if (config.metaDomain) {
-                const resolved = await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle);
+                const resolved = await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, doShuffle, MAX_PRESCREEN);
                 if (resolved.length > 0) ips = resolved.map(bytesToIp);
             } else ips = parseIpList(DEFAULT_META_IP, doShuffle);
         }
@@ -415,6 +415,10 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
                 if (doShuffle) ips = shuffle(ips);
             }
         }
+    }
+    if(ips.length > MAXFINAL){
+        if(doShuffle) ips = shuffle([...ips]);
+        ips = ips.slice(0, MAXFINAL);
     }
     return { domain, type, answers: ips, ech: null };
 }
@@ -556,18 +560,18 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
     if (source === 'preferred') {
         if (owner === 'CF') {
             ipv4 = config.ip4 ? parseIpList(config.ip4, false) :
-                config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, false)).map(bytesToIp) :
+                config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 1, clientIP, false, MAX_PRESCREEN)).map(bytesToIp) :
                 parseIpList(DEFAULT_CF_IP, false);
             ipv6 = !isDomainIpv4Only(domain) ?
                 (config.ip6 ? parseIpList(config.ip6, false) :
-                config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, false)).map(formatIPv6FromBytes) :
+                config.cfDomain ? (await resolveMultiDomainToIps(config.cfDomain, 28, clientIP, false, MAX_PRESCREEN)).map(formatIPv6FromBytes) :
                 parseIpList(DEFAULT_CF_IP6, false)) : [];
         } else {
             ipv4 = config.metaIp4 ? parseIpList(config.metaIp4, false) :
-                config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, false)).map(bytesToIp) :
+                config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 1, clientIP, false, MAX_PRESCREEN)).map(bytesToIp) :
                 parseIpList(DEFAULT_META_IP, false);
             ipv6 = config.metaIp6 ? parseIpList(config.metaIp6, false) :
-                config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 28, clientIP, false)).map(formatIPv6FromBytes) : [];
+                config.metaDomain ? (await resolveMultiDomainToIps(config.metaDomain, 28, clientIP, false, MAX_PRESCREEN)).map(formatIPv6FromBytes) : [];
         }
     }
 
@@ -579,8 +583,8 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
         ]);
     }
 
-    ipv4 = [...new Set(ipv4)].slice(0, 6);
-    ipv6 = [...new Set(ipv6)].slice(0, 6);
+    ipv4 = [...new Set(ipv4)].slice(0, MAXFINAL);
+    ipv6 = [...new Set(ipv6)].slice(0, MAXFINAL);
     if (config.shuffle !== 'false') {
         ipv4 = shuffle(ipv4);   
         ipv6 = shuffle(ipv6);
@@ -1019,11 +1023,11 @@ function parseHttpsRecord(dataStr) {
  */
 function packHttpsParamsWithHints(priority, target, params, ipv4Hints, ipv6Hints) {
     if (ipv4Hints && ipv4Hints.length > 0) {
-        const unique = [...new Set(ipv4Hints)].slice(0, 6);
+        const unique = [...new Set(ipv4Hints)].slice(0, MAXFINAL);
         if (unique.length > 0) params.push({ key: 'ipv4hint', val: unique.join(',') });
     }
     if (ipv6Hints && ipv6Hints.length > 0) {
-        const unique = [...new Set(ipv6Hints)].slice(0, 6);
+        const unique = [...new Set(ipv6Hints)].slice(0,MAXFINAL);
         if (unique.length > 0) params.push({ key: 'ipv6hint', val: unique.join(',') });
     }
     return packHttpsParams(priority, target, params);
