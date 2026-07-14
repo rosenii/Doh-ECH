@@ -892,7 +892,7 @@ function shuffle(arr) {
 /**
  * 多域名并发解析 IP，支持洗牌
  */
-async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = true) {
+async function resolveMultiDomainToIps(domainsStr, type, clientIP, doShuffle = true, limit = 0) {
     const domains = domainsStr.split(',').map(s => s.trim()).filter(s => s);
     if (domains.length === 0) return [];
     const promises = domains.map(d => resolveDomainToIp(d, type, clientIP));
