@@ -410,7 +410,7 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
         const ruleObj = (config.enhance === 'rule' || config.enhance === 'full')
             ? matchRule(domain, config)
             : null;
-        if (!isTypeBlocked(type, ruleObj, config)) {
+        if (!isTypeBlocked(type, ruleObj, config, isCF)) {
             const dnsType = type === 'AAAA' ? 28 : 1;
             const real = await resolveRealHints(domain, dnsType, clientIP);
             if (real.length > 0) {
@@ -464,16 +464,15 @@ async function buildHttpsRecord(domain, config, clientIP, options = {}) {
         ipv6 = hints.ipv6;
     }
 
-    // 2. 应用屏蔽（nocf6 在此处禁用 IPv6 hints）
-    if (isTypeBlocked('A', ruleObj, config)) ipv4 = [];
-    if (isTypeBlocked('AAAA', ruleObj, config)) ipv6 = [];
-    if (isCF && config.nocf6 !== 'false') ipv6 = [];
+    // 2. 应用屏蔽标志（包括 nocf6）
+    if (isTypeBlocked('A', ruleObj, config, isCF)) ipv4 = [];
+    if (isTypeBlocked('AAAA', ruleObj, config, isCF)) ipv6 = [];
 
     // 3. 安全兜底
-    if (ipv4.length === 0 && !isTypeBlocked('A', ruleObj, config)) {
+    if (ipv4.length === 0 && !isTypeBlocked('A', ruleObj, config, isCF)) {
         ipv4 = await resolveRealHints(domain, 1, clientIP);
     }
-    if (ipv6.length === 0 && !isTypeBlocked('AAAA', ruleObj, config)) {
+    if (ipv6.length === 0 && !isTypeBlocked('AAAA', ruleObj, config, isCF)) {
         ipv6 = await resolveRealHints(domain, 28, clientIP);
     }
 
@@ -1773,7 +1772,7 @@ function json(data, status = 200) {
  * @param {object} config - 当前请求配置
  * @returns {boolean}
  */
-function isTypeBlocked(type, ruleObj, config) {
+function isTypeBlocked(type, ruleObj, config, isCF = false) {
     if (ruleObj) {
         if (type === 'A' && ruleObj.noA) return true;
         if (type === 'AAAA') {
@@ -1782,11 +1781,13 @@ function isTypeBlocked(type, ruleObj, config) {
             }
         }
     }
-
+    // CF 站点默认禁用 IPv6（可通过 nocf6=false 开启）
+    if (type === 'AAAA' && isCF && config.nocf6 !== 'false') {
+        return true;
+    }
     if (type === 'AAAA' && config.no6 === 'true') {
         return true;
     }
-
     return false;
 }
 function getHtml() {
