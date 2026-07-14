@@ -92,7 +92,7 @@ const BUILTIN_HINTS = {
 | `rules` |  增强模式域名ip匹配规则 |格式`*.domain1,*.domain2:ip1,ip2-noA-noAAAA`（`-noA/AAAA`屏蔽且不返回A/AAAA记录 ） |``|
 | `alpn` |  alpn列表 |默认 `h3,h2`     |``|
 | `no6` |  全局屏蔽AAAA记录 |默认 `false`     |``|
-| `nocf6` |  屏蔽CF AAAA记录 |默认 `false`     |``|
+| `nocf6` |  屏蔽CF AAAA记录 |默认 `true`     |``|
 
 > **ClientIP自动获取逻辑：部分客户端DNS请求获取不到CF-Connecting-IP，请主动填入clientIp**
 ```
