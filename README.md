@@ -1,9 +1,11 @@
 # DOH-ECH ：私人DOH服务器+HTTPS RR控制器 + ECH注入器
 
  **个人 DNS-over-HTTPS (DoH) 服务器**:
- **1.基于ECH拓展**： 智能为 Cloudflare / Meta 站点注入 ECH 配置,实现隐藏SNI直连访问 X,Facebook等。
- **2.利用QUIC Client Initial 分片**：Chrome/Firefox以及代理客户端等多已支持。为大多数SNI阻断的网站返回alpn=h3，实现直连访问，如：fastlyCDN站点如Reddit,Twitch返回alpn:h3的优选HTTPS记录,为Google站点返回alpn:h3,仅ipv6hints的HTTPS记录并屏蔽A记录，实现直连，需客户端支持ipv6网络。
-
+ **1.基于ECH拓展**： 
+     智能为 Cloudflare / Meta 站点注入 ECH 配置
+ **2.利用QUIC Client Initial 分片** 
+     Chrome/Firefox以及代理客户端等多已支持，为支持quic协议的网站返回alpn=h3，为指定站点返回alpn:h3,仅ipv6hints的HTTPS记录并屏蔽A记录等
+     
 ---
 ## 警告
 本项目由AI生成，仅供娱乐目的， **不得用于非法用途，请遵守当地法律法规合理学习和使用**，用于违反当地法律法规的非法用途造成的后果与本人本项目无关！
