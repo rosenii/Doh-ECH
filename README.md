@@ -3,7 +3,7 @@
  **个人 DNS-over-HTTPS (DoH) 服务器**:
  
  **1.基于ECH拓展**： 
-     智能为 Cloudflare / Meta 站点注入 ECH 配置
+     智能为 Cloudflare / Meta 站点HTTPS RR 注入 ECH 配置
      
  **2.利用QUIC Client Initial 分片** 
      Chrome/Firefox以及代理客户端等多已支持，为支持quic协议的网站返回alpn=h3，为指定站点返回alpn:h3,仅ipv6hints的HTTPS记录并屏蔽A记录等
