@@ -39,7 +39,7 @@ const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/Kr
 const BUILTIN_HINTS = [
     {
         hosts:["https://raw.hellogithub.com/hosts.json"],
-        noA:flase, noAAAA: true
+        noA:false, noAAAA: true
     },
     {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
