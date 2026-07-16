@@ -105,7 +105,8 @@ const PREFIX_CACHE_TTL = 30 * 60 * 1000;       // 前缀缓存 30 分钟
 const prefixCache = new Map();
 const MAX_PRESCREEN = 10;//候选记录最多条目
 const MAX_FINAL = 6;//记录最终返回最多条目
-
+const HOSTS_CACHE_TTL =24 * 3600 * 1000;   // hosts 缓存 1天
+const hostsCache = new Map();
 // 延迟编译 CIDR 
 let compiledMeta = null, compiledCF = null;
 function getCompiledMeta() { if (!compiledMeta) compiledMeta = compileCidrs(RAW_META_CIDRS); return compiledMeta; }
@@ -596,29 +597,99 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
 // ===================== 规则匹配 =====================
 
 let builtinRulesMap = null;
-function getBuiltinRulesMap() {
+
+async function getBuiltinRulesMap() {
     if (builtinRulesMap) return builtinRulesMap;
-    builtinRulesMap = new Map();
+
+    const map = new Map();
     const hints = BUILTIN_HINTS;
+
     if (Array.isArray(hints)) {
+        // 第一遍：处理 hosts 条目，生成基础规则
         for (const group of hints) {
-            const { domains, ips = [], noA = false, noAAAA = false } = group;
-            const ruleObj = { ips, noA, noAAAA };
-            for (const domain of domains) {
-                builtinRulesMap.set(domain, ruleObj);
+            if (group.hosts && Array.isArray(group.hosts)) {
+                const noA = group.noA || false;
+                const noAAAA = group.noAAAA || false;
+                const hostIpsMap = new Map();   // domain → Set of ips
+
+                for (const url of group.hosts) {
+                    let data = null;
+                    const cached = hostsCache.get(url);
+
+                    if (cached && Date.now() < cached.expire) {
+                        data = cached.data;
+                    } else {
+                        try {
+                            const controller = new AbortController();
+                            const timer = setTimeout(() => controller.abort(), 5000);
+                            const res = await fetch(url, { signal: controller.signal });
+                            clearTimeout(timer);
+                            if (res.ok) {
+                                data = await res.json();
+                                hostsCache.set(url, {
+                                    data: data,
+                                    expire: Date.now() + HOSTS_CACHE_TTL
+                                });
+                            } else if (cached) {
+                                data = cached.data;
+                            }
+                        } catch (e) {
+                            console.error('Fetch hosts error:', url, e);
+                            if (cached) data = cached.data;
+                        }
+                    }
+
+                    if (data && Array.isArray(data)) {
+                        for (const entry of data) {
+                            let domain, ip;
+                            if (typeof entry === 'object' && !Array.isArray(entry)) {
+                                domain = entry.domain || entry.host || '';
+                                ip = entry.ip || entry.addr || '';
+                            } else if (Array.isArray(entry) && entry.length >= 2) {
+                                ip = entry[0];
+                                domain = entry[1];
+                            }
+                            if (domain && ip) {
+                                if (!hostIpsMap.has(domain)) hostIpsMap.set(domain, new Set());
+                                hostIpsMap.get(domain).add(ip);
+                            }
+                        }
+                    }
+                }
+
+                // 将收集到的域名-IP写入 map
+                for (const [domain, ipSet] of hostIpsMap.entries()) {
+                    const ips = Array.from(ipSet);
+                    map.set(domain, { ips, noA, noAAAA });
+                }
+            }
+        }
+
+        // 第二遍：处理普通条目（可覆盖 hosts 生成的规则）
+        for (const group of hints) {
+            if (group.domains && Array.isArray(group.domains)) {
+                const { ips = [], noA = false, noAAAA = false } = group;
+                const ruleObj = { ips, noA, noAAAA };
+                for (const d of group.domains) {
+                    map.set(d, ruleObj);
+                }
             }
         }
     } else {
+        // 兼容旧的对象式写法
         for (const [domain, val] of Object.entries(hints)) {
-            builtinRulesMap.set(domain, {
+            map.set(domain, {
                 ips: Array.isArray(val) ? val : (val.ips || []),
                 noA: val.noA || false,
                 noAAAA: val.noAAAA || false
             });
         }
     }
-    return builtinRulesMap;
+
+    builtinRulesMap = map;
+    return map;
 }
+
 function matchRule(domain, config) {
    
     const merged = new Map(getBuiltinRulesMap());
