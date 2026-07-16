@@ -38,6 +38,10 @@ const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/Kr
 //enhance：rule/full下 ：增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽记录规则优先级也高于全局屏蔽AAAA参数
 const BUILTIN_HINTS = [
     {
+        hosts:["https://raw.hellogithub.com/hosts.json"],
+        noA:flase, noAAAA: true
+    },
+    {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
         domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.recaptcha.net"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
@@ -71,7 +75,6 @@ const BUILTIN_HINTS = [
     { domains: ["*.docker.com", "*.docker.io", "*.production.cloudflare.docker.com"], ips: [], noA: true, noAAAA: false },       
     //FastlyCDN优化(禁用ipv6)
     { domains: ["*.reddit.com", "*.redd.it", "*.redditmedia.com", "*.redditstatic.com"], ips: ["151.101.1.140", "151.101.65.140", "151.101.129.140", "151.101.193.140"], noA: false, noAAAA: true },
-//    { domains: [ "*.githubassets.com", "*.githubusercontent.com", "*.github.io", "*.raw.githubusercontent.com"], ips: ["185.199.108.133", "185.199.109.133", "185.199.110.133", "185.199.111.133"], noA: false, noAAAA: true },
     { domains: ["*.imgur.com", "*.i.imgur.com", "*.api.imgur.com", "*.s.imgur.com"], ips: ["151.101.1.193", "151.101.65.193", "151.101.129.193", "151.101.193.193"], noA: false, noAAAA: true },
     { domains: ["*.giphy.com", "*.media.giphy.com", "*.giphy.gif", "*.api.giphy.com"], ips: ["151.101.1.132", "151.101.65.132", "151.101.129.132", "151.101.193.132"], noA: false, noAAAA: true },
     { domains: ["*.pypi.org", "*.pythonhosted.org", "*.files.pythonhosted.org"], ips: ["151.101.1.223", "151.101.65.223", "151.101.129.223", "151.101.193.223"], noA: false, noAAAA: true },
@@ -138,9 +141,10 @@ function buildConfig(url, headers = null) {
 // ===================== Worker 入口 =====================
 export default {
     async fetch(req, env, ctx) {
-        // 异步预热国内域名列表和CF ECH配置
+        // 异步预热国内域名列表/CF ECH配置/hosts文件
         ctx.waitUntil(ensureCNDomainSet());
         ctx.waitUntil(fetchRealEch('cloudflare-ech.com', ''));
+         ctx.waitUntil(getBuiltinRulesMap());
         const url = new URL(req.url);
         if (url.pathname === '/log') {return handleLogsRequest();}
         const clientIP = url.searchParams.get('clientIp') || req.headers.get('X-ClientIP') || req.headers.get('CF-Connecting-IP') || '1.2.4.8';
@@ -287,7 +291,7 @@ async function resolveDNS(domain, type, config, clientIP) {
         if (type === 'AAAA' && config.no6 === 'true') {
             const isEnhanceActive = config.enhance === 'rule' || config.enhance === 'full';
             if (isEnhanceActive) {
-                const ruleObj = matchRule(domain, config);
+                const ruleObj = await matchRule(domain, config);
                 // 规则匹配且提供了 IPv6 或未屏蔽 AAAA → 放行
                 if (ruleObj && (!ruleObj.noAAAA || ruleObj.ips.some(ip => ip.includes(':')))) {  
                 } else {
@@ -299,7 +303,7 @@ async function resolveDNS(domain, type, config, clientIP) {
      }
     // 增强模式规则屏蔽 / 指定 IP（对所有域名生效，包括静态域名）
     if (config.enhance === 'rule' || config.enhance === 'full') {
-        const ruleObj = matchRule(domain, config);
+        const ruleObj = await matchRule(domain, config);
         if (ruleObj) {
             // 规则指定了对应类型的 IP → 直接返回规则 IP
             if (type === 'A' && ruleObj.ips.some(ip => !ip.includes(':'))) {
@@ -409,7 +413,7 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
     // ----- 通用安全兜底：如果最终 IP 列表为空且未被屏蔽，从上游获取真实记录 -----
     if (ips.length === 0) {
         const ruleObj = (config.enhance === 'rule' || config.enhance === 'full')
-            ? matchRule(domain, config)
+            ? await matchRule(domain, config)
             : null;
         if (!isTypeBlocked(type, ruleObj, config, isCF)) {
             const dnsType = type === 'AAAA' ? 28 : 1;
@@ -439,7 +443,7 @@ async function buildHttpsRecord(domain, config, clientIP, options = {}) {
     const alpn = config.alpn || 'h3,h2';
     const owner = isCF ? 'CF' : (isMeta ? 'META' : null);
     const mode = config.enhance || 'off';
-    const ruleObj = (mode === 'rule' || mode === 'full') ? matchRule(domain, config) : null;
+    const ruleObj = (mode === 'rule' || mode === 'full') ? await matchRule(domain, config) : null;
 
     let ipv4 = [], ipv6 = [];
 
@@ -544,7 +548,7 @@ async function collectIpHints(domain, config, clientIP, owner, source) {
 
     // 规则匹配 (rule/full 优先)
     if (source === 'rule' || source === 'full') {
-        const ruleObj = matchRule(domain, config);
+        const ruleObj = await matchRule(domain, config);
         if (ruleObj !== null) {
             const matchedIPs = ruleObj.ips;
             ipv4 = matchedIPs.filter(ip => !ip.includes(':'));
@@ -690,9 +694,9 @@ async function getBuiltinRulesMap() {
     return map;
 }
 
-function matchRule(domain, config) {
+async function matchRule(domain, config) {
    
-    const merged = new Map(getBuiltinRulesMap());
+    const merged = new Map(await getBuiltinRulesMap());
     for(const[key,rule] of merged){  rule.ips = rule.ips.flatMap(ip => ip.includes('/') ? getPrefixIPs(ip) : [ip]); }
     if (config.rules) {
         const user = parseRules(config.rules);
