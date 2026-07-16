@@ -54,16 +54,30 @@
 
 ```javascript
 const BUILTIN_HINTS = {
-    // 写法一：纯 IPv4 / IPv6 地址列表，无屏蔽
-    "*.example.com": ["1.2.3.4", "2001:db8::1"],
 
-    // 写法二：对象形式，支持屏蔽标志和 IP 列表
-    "*.domain.com": {
+    // 写法一：对象形式，支持屏蔽标志和 IP 列表
+    {
+        domains:["*.domain1.com","domain2.com"],
         ips: ["1.2.3.4", "2001:db8::/32"],  // 可使用 IPv6 前缀（/32 等）
         noA: true,                          // 屏蔽 A 记录（仅 IPv6）
         noAAAA: false                       // 允许 AAAA 记录
     }
+    //写法二：从远程读取hosts文件
+    {
+        hosts:["https://hosts1.txt","https://hosts2.json"],
+        noA:flase, noAAAA: true
+    },
 };
+hosts文件支持两种格式：
+[
+  ["8.8.8.8","dns.google"],
+  ["8.8.8.8","dns.google"]
+]
+[
+  { "domain":"dns.google","ip":"8.8.8.8"},
+  { "domain":"dns.google","ip":"8.8.8.8"}
+]
+
 ```
 #### 通过`rules` 参数或`X-Rules`请求头参数配置
 - **域名**：必填，支持通配符 `*.`（匹配所有子域及根域）。可逗号分隔多个域名。
