@@ -40,12 +40,14 @@
 
 ### 增强内容
 开启增强模式后，匹配到的域名将获得以下优化：
-
+**自定义 SVC_PARAM**
 - **ALPN 强制**：HTTPS 记录中注入 `alpn="h3,h2"`，引导浏览器优先使用 QUIC (HTTP/3)，失败时可回退 HTTP/2。可通过 `alpn` 参数自定义（如 `h3` 仅 QUIC）。
 - **mandatory 指定**：指定哪些 HTTPS 参数必须被客户端理解，否则客户端应忽略整条 HTTPS 记录
 - **no-default-alpn** 
 - **IP Hints 注入**：HTTPS 记录中添加 `ipv4hint` 和/或 `ipv6hint`，浏览器可直接尝试这些 IP 建立连接，跳过 A/AAAA 查询。
+**自定义规则**  
 - **A/AAAA 记录屏蔽**：可通过规则标志 `noA` 或 `noAAAA` 完全屏蔽对应类型的 DNS 查询，强制浏览器依赖 hints 或仅使用特定 IP 版本。
+-  **读取自定义远程hosts**
 
 ### 规则格式
 增强模式的核心是**规则**，用于精确指定需要优化的域名及其参数。
