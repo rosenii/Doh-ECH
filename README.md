@@ -44,7 +44,7 @@
 **自定义 SVC_PARAM**
 - **ALPN 强制**：HTTPS 记录中注入 `alpn="h3,h2"`，引导浏览器优先使用 QUIC (HTTP/3)，失败时可回退 HTTP/2。可通过 `alpn` 参数自定义（如 `h3` 仅 QUIC）。
 - **mandatory 指定**：指定哪些 HTTPS 参数必须被客户端理解，否则客户端应忽略整条 HTTPS 记录
-- **no-default-alpn** 
+- **no-default-alpn** ：强制浏览器绝不能使用 alpn 列表之外的任何“默认”协议作为备选或回退(遗憾：所以浏览器均不支持此参数)
 - **IP Hints 注入**：HTTPS 记录中添加 `ipv4hint` 和/或 `ipv6hint`，浏览器可直接尝试这些 IP 建立连接，跳过 A/AAAA 查询。
   
 **自定义规则**  
