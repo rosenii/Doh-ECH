@@ -108,7 +108,7 @@ const PREFIX_CACHE_TTL = 30 * 60 * 1000;       // 前缀缓存 30 分钟
 const prefixCache = new Map();
 const MAX_PRESCREEN = 10;//候选记录最多条目
 const MAX_FINAL = 6;//记录最终返回最多条目
-const HOSTS_CACHE_TTL =24 * 3600 * 1000;   // hosts 缓存 1天
+const HOSTS_CACHE_TTL =12 * 3600 * 1000;   // hosts 缓存12小时
 const hostsCache = new Map();
 // 延迟编译 CIDR 
 let compiledMeta = null, compiledCF = null;
