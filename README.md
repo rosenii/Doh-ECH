@@ -5,7 +5,7 @@
  **1.基于ECH拓展**： 
      智能为 Cloudflare / Meta 站点HTTPS RR 注入 ECH 配置
      
- **2.利用QUIC Client Initial 分片** 
+ **2.利用QUIC Client Initial 分片**: 
      Chrome/Firefox以及代理客户端等多已支持，为支持quic协议的网站返回alpn=h3，为指定站点返回alpn:h3,仅ipv6hints的HTTPS记录并屏蔽A记录等
      
 ---
@@ -112,7 +112,7 @@ hosts文件支持两种格式：
 | `exclude` | 返回记录排除指定ip/domain |（`1.1.1.1`/ `cf.cf` ） |``|
 | `shuffle` |  乱序返回记录 |默认`false`（`false`/ `true` ） |`false`|
 | `area` |  指定ip区域 |留空`不过滤`（`area=hk,sg,jp` ） |``|
-| `enhance` |  增强模式 fastly,Google直连 |可选`off` `rule` `full`    |``|
+| `enhance` |  增强模式 |可选`off` `rule` `full`  默认`rule`  |``|
 | `rules` |  增强模式域名ip匹配规则 |格式`*.domain1,*.domain2:ip1,ip2-noA-noAAAA`（`-noA/AAAA`屏蔽且不返回A/AAAA记录 ） |``|
 | `alpn` |  alpn列表 |默认 `h3,h2`     |``|
 | `no6` |  全局屏蔽AAAA记录 |默认 `false`     |``|
