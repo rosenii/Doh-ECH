@@ -56,7 +56,7 @@ const BUILTIN_HINTS = [
     },
     {
         // GGC (Google Global Cache) 分类组：专门分流并加速网页样式、Web 字体、浏览器更新及视频封面等静态资源
-        domains: ["*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com"],
+        domains: ["*.googlesource.com","*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
         noA: true,    noAAAA: false      
     },
@@ -126,7 +126,7 @@ function buildConfig(url, headers = null) {
         echDomain: get('ech', 'X-ECH') || 'cloudflare-ech.com',
         best: get('best', 'X-Best') || 'false', sub: get('sub', 'X-Sub'),
         exclude: get('exclude', 'X-Exclude'), shuffle: get('shuffle', 'X-Shuffle') || 'true',
-        area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'off',
+        area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'rule',
         rules: get('rules', 'X-Rules'), alpn: get('alpn', 'X-Alpn') || 'h3,h2',
         clientIp: get('clientIp', 'X-ClientIP') || '',
         no6: get('no6', 'X-No6') || 'false',   
