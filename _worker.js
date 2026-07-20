@@ -56,7 +56,7 @@ const BUILTIN_HINTS = [
     },
     {
         // GGC (Google Global Cache) 分类组：专门分流并加速网页样式、Web 字体、浏览器更新及视频封面等静态资源
-        domains: ["*.googlesource.com","*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com","*.gvt2.com","*.crashlytics.com","firebaseio.com","firebasedatabase.app"],
+        domains: ["*.googlesource.com","*.gstatic.com", "*.googleusercontent.com", "*.ytimg.com", "*.ggpht.com", "*.gvt1.com","*.gvt2.com","*.googleadservices.com","*.doubleclick.net","*.googlesyndication.com","*.google-analytics.com","*.crashlytics.com","firebaseio.com","firebasedatabase.app"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
         noA: true,    noAAAA: false      
     },
