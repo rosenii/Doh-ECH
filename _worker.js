@@ -69,7 +69,7 @@ const BUILTIN_HINTS = [
     {
         // Wikipedia 维基百科(禁用ipv4)（全球最大的百科知识库，其通用任播边缘全面部署了支持 HTTP/3 的 ATS 架构）
         domains: ["*.wikipedia.org", "*.wikimedia.org", "*.wikibooks.org", "*.wikidata.org"],
-        ips: [],  noA: true, noAAAA: false
+        ips: [],  noA: false, noAAAA: true
     },
    //Others(禁用ipv4)
     { domains: ["*.docker.com", "*.docker.io", "*.production.cloudflare.docker.com"], ips: [], noA: true, noAAAA: false },       
