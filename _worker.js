@@ -43,7 +43,7 @@ const BUILTIN_HINTS = [
     },
     {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
-        domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.recaptcha.net"],
+        domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.googleapis.cn","*.recaptcha.net"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
         noA: true,// 强制屏蔽 IPv4只留ipv6记录以绕过 GFW 的 v4 封锁
         noAAAA: false
