@@ -235,8 +235,7 @@ async function handleApiQuery(url, clientIP) {
     const domain = url.searchParams.get('domain');
     const type = url.searchParams.get('type')?.toUpperCase() || 'A';
     if (!domain) return json({ error: '缺少 domain' }, 400);
-    if (!['A', 'AAAA', 'HTTPS'].includes(type)) return json({ error: '类型不支持' }, 400);
-
+    if (!['A', 'AAAA', 'HTTPS', 'CNAME', 'TXT', 'MX', 'NS'].includes(type)) return json({ error: '类型不支持' }, 400);
     const config = buildConfig(url);
     if (!config.clientIp) config.clientIp = clientIP;
     await applySubConfig(config);
@@ -362,7 +361,8 @@ async function resolveDNS(domain, type, config, clientIP) {
         }
         return result;
     }
-    return { domain, type, error: '未知类型' };
+    // 通用兜底：CNAME、TXT、MX 等所有其他类型
+    return await resolveFallbackRecord(domain, type, clientIP);
 }
 
 function cleanResult(result) {
@@ -430,6 +430,11 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
     }
     return { domain, type, answers: ips, ech: null };
 }
+// ===================== CN域名处理 =====================
+async function handleCNDomain(domain, type, config, clientIP) {
+    return await resolveFallbackRecord(domain, type, clientIP, UPSTREAM_CN_JSON);                                        
+}
+
 //=====================公共 HTTPS 记录构建函数=====================    
 async function buildHttpsRecord(domain, config, clientIP, options = {}) {
     const {
@@ -1313,7 +1318,44 @@ function dnsResponse(buffer) {
         headers: { 'Content-Type': 'application/dns-message', 'Access-Control-Allow-Origin': '*' }
     });
 }
+/**
+ * 兜底记录解析：直接查询上游并返回原始答案。
+ * 适用于所有非 A/AAAA/HTTPS 类型，也可用于 HTTPS 类型的通用解析。
+ */
+async function resolveFallbackRecord(domain, type, clientIP, upstreamUrl = null) {
+    const typeMap = {
+        'A': 1,
+        'AAAA': 28,
+        'CNAME': 5,
+        'TXT': 16,
+        'MX': 15,
+        'NS': 2,
+        'HTTPS': 65
+    };
+    const dnsType = typeMap[type] || 1;
 
+    const data = await queryUpstreamDNS(domain, dnsType, clientIP, upstreamUrl);
+    if (!data) return { domain, type, error: '上游查询失败' };
+
+    if (type === 'HTTPS') {
+        const result = { domain, type, answers: [] };
+        if (data?.Answer) {
+            const rec = data.Answer.find(r => r.type === 65);
+            if (rec) {
+                const parsed = parseHttpsRecordFull(rec.data);
+                if (parsed) {
+                    result.ech = parsed.ech || null;
+                    result.ipv4hints = parsed.ipv4hints || [];
+                    result.ipv6hints = parsed.ipv6hints || [];
+                }
+            }
+        }
+        return result;
+    }
+
+    const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
+    return { domain, type, answers, ech: null };
+}
 /**
  * 加载/更新国内域名集合
  * 第一次调用时立即用内置后缀构建集合，后续异步拉取远程列表，不阻塞请求。
@@ -1367,36 +1409,6 @@ function isCNDomain(domain) {
     return false;
 }
 
-/**
- * 国内域名处理：直接查询阿里 DNS 并返回原始记录，不做任何修改。
- * @param {string} domain - 查询域名
- * @param {string} type - 查询类型 (A/AAAA/HTTPS)
- * @param {object} config - 当前请求配置
- * @param {string} clientIP - 客户端 IP（用于 ECS）
- * @returns {object} 与 resolveDNS 相同的返回结构
- */
-async function handleCNDomain(domain, type, config, clientIP) {
-    const dnsType = type === 'AAAA' ? 28 : (type === 'HTTPS' ? 65 : 1);
-    const data = await queryUpstreamDNS(domain, dnsType, clientIP, UPSTREAM_CN_JSON);
-
-    if (type === 'HTTPS') {
-        const result = { domain, type, answers: [] };
-        if (data?.Answer) {
-            const rec = data.Answer.find(r => r.type === 65);
-            if (rec) {
-                const parsed = parseHttpsRecordFull(rec.data);
-                if (parsed) {
-                    result.ech = parsed.ech || null;
-                    result.ipv4hints = parsed.ipv4hints || [];
-                    result.ipv6hints = parsed.ipv6hints || [];
-                }
-            }
-        }
-        return result;
-    }
-    const answers = data?.Answer?.filter(r => r.type === dnsType).map(r => r.data) || [];
-    return { domain, type, answers, ech: null };
-    }
 /**
  * 从 IPv6 前缀生成指定数量的随机 IPv6 地址
  * @param {string} prefixStr - 前缀字符串，如 "2001:4860:4827:7700::/64"
