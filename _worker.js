@@ -432,7 +432,32 @@ async function handleStaticDomain(domain, type, config, isCF, isMeta, clientIP) 
 }
 // ===================== CN域名处理 =====================
 async function handleCNDomain(domain, type, config, clientIP) {
-    return await resolveFallbackRecord(domain, type, clientIP, UPSTREAM_CN_JSON);                                        
+    // 获取增强规则对象（仅增强模式开启时）
+    const ruleObj = (config.enhance === 'rule' || config.enhance === 'full')
+        ? await matchRule(domain, config)
+        : null;
+
+    // 1. 检查屏蔽（复用 isTypeBlocked）
+    if (isTypeBlocked(type, ruleObj, config, false)) {
+        return { domain, type, answers: [], ech: null };
+    }
+
+    // 2. 规则提供了对应类型的 IP → 直接返回规则 IP
+    if (ruleObj) {
+        if (type === 'A' && ruleObj.ips.some(ip => !ip.includes(':'))) {
+            let ips = ruleObj.ips.filter(ip => !ip.includes(':'));
+            if (config.shuffle !== 'false') ips = shuffle(ips);
+            return { domain, type, answers: ips, ech: null };
+        }
+        if (type === 'AAAA' && ruleObj.ips.some(ip => ip.includes(':'))) {
+            let ips = ruleObj.ips.filter(ip => ip.includes(':'));
+            if (config.shuffle !== 'false') ips = shuffle(ips);
+            return { domain, type, answers: ips, ech: null };
+        }
+    }
+
+    // 3. 未匹配规则或无IP，走国内兜底（查询上游返回原始记录）
+    return await resolveFallbackRecord(domain, type, clientIP, UPSTREAM_CN_JSON);
 }
 
 //=====================公共 HTTPS 记录构建函数=====================    
