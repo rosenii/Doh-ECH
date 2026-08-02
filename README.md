@@ -90,7 +90,7 @@ hosts文件支持两种格式：
 
 **示例**：
 `*.google.com:2001:4860:4827:7700::,142.250.80.78-noA`
-`google.com,google.com.hk::noA-noAAAA`
+`google.com,google.com.hk:-noA-noAAAA`
 
 
 ## 自定义参数
