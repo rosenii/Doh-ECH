@@ -99,16 +99,16 @@ let cnDomainSet = null;
 let cnDomainLastFetch = 0;
 const CN_DOMAIN_CACHE_TTL = 7 * 24 * 3600 * 1000;   // 每7天更新CN列表
 const cacheMap = new Map();
-const CACHE_TTL = 24 * 3600 * 1000;
+const CACHE_TTL = 7 * 24 * 3600 * 1000;
 const ECH_CACHE_TTL = 3600 * 1000;
 const SUB_CACHE_TTL = 24 * 3600 * 1000;
 const subCache = new Map();
 const RANDOM_IPV6_COUNT = 2;                  // 每个前缀生成 2 个随机 IP
-const PREFIX_CACHE_TTL = 6 * 3600 * 1000;       // 前缀缓存6小时
+const PREFIX_CACHE_TTL = 24 * 3600 * 1000;       // 前缀缓存24小时
 const prefixCache = new Map();
 const MAX_PRESCREEN = 10;//候选记录最多条目
 const MAX_FINAL = 6;//记录最终返回最多条目
-const HOSTS_CACHE_TTL =12 * 3600 * 1000;   // hosts 缓存12小时
+const HOSTS_CACHE_TTL =24 * 3600 * 1000;   // hosts 缓存24小时
 const hostsCache = new Map();
 // 延迟编译 CIDR 
 let compiledMeta = null, compiledCF = null;
