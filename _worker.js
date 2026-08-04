@@ -637,7 +637,6 @@ async function getBuiltinRulesMap() {
 
     const map = new Map();
     const hints = BUILTIN_HINTS;
-
     if (Array.isArray(hints)) {
         // 第一遍：处理 hosts 条目，生成基础规则
         for (const group of hints) {
@@ -645,7 +644,6 @@ async function getBuiltinRulesMap() {
                 const noA = group.noA || false;
                 const noAAAA = group.noAAAA || false;
                 const hostIpsMap = new Map();
-
                 for (const url of group.hosts) {
                     let data = null;
                     const cacheKey = `https://dns-cache/hosts/${encodeURIComponent(url)}`;
@@ -664,8 +662,7 @@ async function getBuiltinRulesMap() {
                             } catch (e) {
                                 data = null;
                             }
-                        }
-                        
+                        }    
                         // 3. Cache API 未命中，远程下载（原逻辑）
                         if (!data) {
                             try {
@@ -1826,8 +1823,8 @@ async function applySubConfig(config) {
                 content = cachedText;
                 subCache.set(url, { content, expire: Date.now() + SUB_CACHE_TTL });
             } else {
-            try {
-               // 3. 远程下载（原有逻辑）
+                 // 3. 远程下载（原有逻辑）
+               try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 5000);
                 const res = await fetch(url, { signal: controller.signal });
@@ -1847,8 +1844,8 @@ async function applySubConfig(config) {
                     content = cached.content;
                     cached.expire = Date.now() + SUB_CACHE_TTL;
                 }   
-                else continue;
-            }
+              }
+           }
         }
         if (!content) continue;
         const lines = content.split(/\r?\n/)
