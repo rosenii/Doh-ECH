@@ -33,7 +33,7 @@ const CF_STATIC_DOMAINS = ["twimg.com", "twitter.com", "x.com", "t.co","cloudfla
 //Meta 配置
 const DEFAULT_META_IP = "";//默认META优选IP
 const META_DOMAINS = ["facebook.com", "messenger.com", "instagram.com","whatsapp.com", "fb.com", "meta.com"];//不查询-直接返回优选结果的META域名列表
-const META_ECH_CONFIG = "AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAEAAWQVZWNoLXB1YmxpYy5hdG1ldGEuY29tAAA=";//固定META ECH，过期自行更换
+const META_ECH_CONFIG = "";//固定META ECH，过期自行更换
 
 //enhance：rule/full下 ：增强规则列表,最高优先级，此列表内指定的ip直接作为A/AAAA IPhints返回，屏蔽记录规则优先级也高于全局屏蔽AAAA参数
 const BUILTIN_HINTS = [
