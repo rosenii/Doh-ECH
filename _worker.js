@@ -929,6 +929,10 @@ function injectEnhanceDefaults(params, mandatoryValue) {
  */
 async function handleLogsRequest() {
     try {
+        // 确保 workerStartTime 只初始化一次（惰性初始化，且防止无效值）
+        if (!globalThis.__workerStartTime || globalThis.__workerStartTime < 1000000000000) {
+            globalThis.__workerStartTime = Date.now();
+        }
         await ensureCNDomainSet();
         const now = Date.now();
 
