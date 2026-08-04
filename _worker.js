@@ -97,7 +97,7 @@ const CN_DOMAIN_SUFFIXES = ['jd.com','meituan.com','taobao.com', '.cn', '.com.cn
 // ===================== 缓存逻辑 =====================
 let cnDomainSet = null;
 let cnDomainLastFetch = 0;
-let workerStartTime = Date.now();
+const  workerStartTime = Date.now();
 const CN_DOMAIN_CACHE_TTL = 7 * 24 * 3600 * 1000;   // 每7天更新CN列表
 const cacheMap = new Map();
 const CACHE_TTL = 7 * 24 * 3600 * 1000;         //归属探测缓存7天
