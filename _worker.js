@@ -928,139 +928,96 @@ function injectEnhanceDefaults(params, mandatoryValue) {
  * 日志系统
  */
 async function handleLogsRequest() {
-    await ensureCNDomainSet();
-    const now = Date.now();
+    try {
+        await ensureCNDomainSet();
+        const now = Date.now();
 
-    // 辅助：毫秒时间戳 → 东八区 ISO 字符串
-    const toBeijingTime = (ts) => {
-        const d = new Date(ts);
-        const offset = 8 * 60; // 东八区偏移分钟数
-        const local = new Date(d.getTime() + offset * 60 * 1000);
-        return local.toISOString().replace('Z', '+08:00');
-    };
+        // 辅助：毫秒时间戳 → 东八区 ISO 字符串
+        const toBeijingTime = (ts) => {
+            if (!ts) return null;
+            const d = new Date(ts);
+            const offset = 8 * 60; // 东八区偏移分钟数
+            const local = new Date(d.getTime() + offset * 60 * 1000);
+            return local.toISOString().replace('Z', '+08:00');
+        };
 
-    // ==================== Worker 运行信息 ====================
-    const uptimeMs = now - workerStartTime;
-    const uptimeSeconds = Math.floor(uptimeMs / 1000);
-    const hours = Math.floor(uptimeSeconds / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const seconds = uptimeSeconds % 60;
-    const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
+        // ==================== Worker 运行信息 ====================
+        // 使用顶层常量 workerStartTime，若未初始化则用当前时间兜底
+        const startTime = (typeof workerStartTime !== 'undefined' && workerStartTime > 0) ? workerStartTime : now;
+        const uptimeMs = now - startTime;
+        const uptimeSeconds = Math.floor(uptimeMs / 1000);
+        const hours = Math.floor(uptimeSeconds / 3600);
+        const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+        const seconds = uptimeSeconds % 60;
+        const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
 
-    const runtime = {
-        _description: 'Worker 运行信息',
-        uptime: uptimeFormatted,
-        startedAt: toBeijingTime(workerStartTime),
-    };
+        const runtime = {
+            _description: 'Worker 运行信息',
+            uptime: uptimeFormatted,
+            startedAt: toBeijingTime(startTime),
+        };
 
-    // ==================== 国内域名列表 (CN List) ====================
-    const cnList = {
-        _description: '国内域名列表加载状态',
-        domainCount: cnDomainSet ? cnDomainSet.size : 0,
-        lastFetch: cnDomainLastFetch ? toBeijingTime(cnDomainLastFetch) : null,
-        nextFetchIn: cnDomainLastFetch
-            ? Math.max(0, CN_DOMAIN_CACHE_TTL - (now - cnDomainLastFetch)) / 1000 + 's'
-            : 'expired',
-        sourceUrl: CN_DOMAIN_LIST_URL,
-        ttl: CN_DOMAIN_CACHE_TTL / 1000 / 3600 + '小时',
-    };
+        // ==================== 国内域名列表 (CN List) ====================
+        const cnList = {
+            _description: '国内域名列表加载状态',
+            domainCount: cnDomainSet ? cnDomainSet.size : 0,
+            lastFetch: cnDomainLastFetch ? toBeijingTime(cnDomainLastFetch) : null,
+            nextFetchIn: cnDomainLastFetch
+                ? Math.max(0, CN_DOMAIN_CACHE_TTL - (now - cnDomainLastFetch)) / 1000 + 's'
+                : 'expired',
+            sourceUrl: CN_DOMAIN_LIST_URL,
+            ttl: CN_DOMAIN_CACHE_TTL / 1000 / 3600 + '小时',
+        };
 
-    // ==================== 缓存状态 ====================
-    const echKey = 'ech:cloudflare-ech.com';
-    const cacheStatus = {
-        _description: '内存 & Cache API 双重缓存状态',
-        memory: {
-            echCache: cacheMap.has(echKey) ? '已预热 (warm)' : '未预热 (cold)',
-            ownerCacheSize: cacheMap.size,
-            subCacheCount: subCache.size,
-            hostsCacheCount: hostsCache.size,
-            prefixCacheCount: prefixCache.size,
-        },
-        edgeCache: {
-            ech: cacheMap.has(echKey) ? '已缓存 (cached)' : '未缓存 (empty)',
-            sub: subCache.size > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
-            cn: cnDomainSet && cnDomainSet.size > 1000 ? '已缓存 (cached)' : '未缓存 (empty)',
-            hosts: hostsCache.size > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
-        }
-    };
-
-    // 订阅缓存详情
-    const subDetails = [];
-    for (const [url, entry] of subCache.entries()) {
-        subDetails.push({
-            url: url,
-            cachedAt: toBeijingTime(entry.expire - SUB_CACHE_TTL),
-            expiresIn: Math.max(0, (entry.expire - now) / 1000).toFixed(0) + 's',
-            contentLength: entry.content ? entry.content.length : 0,
-        });
-    }
-
-    // ==================== 全局参数默认值 ====================
-    const globalDefaults = {
-        _description: '全局参数默认值',
-        best: 'false (非静态域名跟随优选)',
-        shuffle: 'true (随机乱序 IP)',
-        enhance: 'off (增强模式)',
-        no6: 'false (全局屏蔽 IPv6)',
-        alpn: 'h3,h2 (ALPN 列表)',
-        mandatory: 'alpn (强制参数)',
-    };
-
-    // ==================== 内置增强规则 (BUILTIN_HINTS) ====================
-    const builtinRules = {};
-    if (Array.isArray(BUILTIN_HINTS)) {
-        BUILTIN_HINTS.forEach((group, index) => {
-            const groupInfo = {
-                noA: group.noA || false,
-                noAAAA: group.noAAAA || false,
-                ips: group.ips || [],
-                domains: group.domains || [],
-                hosts: group.hosts || []
-            };
-            if (group.domains && Array.isArray(group.domains)) {
-                group.domains.forEach(domain => {
-                    builtinRules[domain] = groupInfo;
-                });
+        // ==================== 缓存状态 ====================
+        const echKey = 'ech:cloudflare-ech.com';
+        const cacheStatus = {
+            _description: '内存 & Cache API 双重缓存状态',
+            memory: {
+                echCache: cacheMap.has(echKey) ? '已预热 (warm)' : '未预热 (cold)',
+                ownerCacheSize: cacheMap.size,
+                subCacheCount: subCache.size,
+                hostsCacheCount: hostsCache.size,
+                prefixCacheCount: prefixCache.size,
+            },
+            edgeCache: {
+                ech: cacheMap.has(echKey) ? '已缓存 (cached)' : '未缓存 (empty)',
+                sub: subCache.size > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
+                cn: cnDomainSet && cnDomainSet.size > 1000 ? '已缓存 (cached)' : '未缓存 (empty)',
+                hosts: hostsCache.size > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
             }
-            if (group.hosts && Array.isArray(group.hosts)) {
-                group.hosts.forEach(hostUrl => {
-                    builtinRules[`_hosts_${index}_${hostUrl}`] = {
-                        ...groupInfo,
-                        type: 'hosts-source',
-                        url: hostUrl
-                    };
-                });
-            }
-        });
-    } else {
-        for (const [domain, val] of Object.entries(BUILTIN_HINTS)) {
-            builtinRules[domain] = {
-                domains: [domain],
-                ips: Array.isArray(val) ? val : (val.ips || []),
-                noA: val.noA || false,
-                noAAAA: val.noAAAA || false
-            };
+        };
+
+        // 订阅缓存详情
+        const subDetails = [];
+        for (const [url, entry] of subCache.entries()) {
+            subDetails.push({
+                url: url,
+                cachedAt: toBeijingTime(entry.expire - SUB_CACHE_TTL),
+                expiresIn: Math.max(0, (entry.expire - now) / 1000).toFixed(0) + 's',
+                contentLength: entry.content ? entry.content.length : 0,
+            });
         }
+
+        // ==================== 组装最终响应 ====================
+        const payload = {
+            timestamp: toBeijingTime(now),
+            runtime: runtime,
+            cnList: cnList,
+            caches: cacheStatus,
+            subCache: subDetails,
+        };
+
+        return json(payload);
+    } catch (e) {
+        // 捕获异常并返回错误信息，方便定位
+        return json({
+            error: e.message,
+            stack: e.stack,
+            note: 'Check top-level constants: workerStartTime, hostsCache, prefixCache, cnDomainSet, etc.'
+        }, 500);
     }
-    const builtinHints = {
-        _description: '内置增强规则 (BUILTIN_HINTS)',
-        rules: builtinRules,
-    };
-
-    // ==================== 组装最终响应 ====================
-    const payload = {
-        timestamp: toBeijingTime(now),
-        runtime: runtime,
-        cnList: cnList,
-        caches: cacheStatus,
-        subCache: subDetails,
-        globalDefaults: globalDefaults,
-        rules: builtinHints,
-    };
-
-    return json(payload);
 }
-
 /**
  * Fisher-Yates 洗牌算法
  */
