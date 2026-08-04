@@ -97,11 +97,12 @@ const CN_DOMAIN_SUFFIXES = ['jd.com','meituan.com','taobao.com', '.cn', '.com.cn
 // ===================== 缓存逻辑 =====================
 let cnDomainSet = null;
 let cnDomainLastFetch = 0;
+let workerStartTime = 0;
 const CN_DOMAIN_CACHE_TTL = 7 * 24 * 3600 * 1000;   // 每7天更新CN列表
 const cacheMap = new Map();
-const CACHE_TTL = 7 * 24 * 3600 * 1000;
-const ECH_CACHE_TTL = 3600 * 1000;
-const SUB_CACHE_TTL = 24 * 3600 * 1000;
+const CACHE_TTL = 7 * 24 * 3600 * 1000;         //归属探测缓存7天
+const ECH_CACHE_TTL = 3600 * 1000;              //ech缓存1小时
+const SUB_CACHE_TTL =  24 * 3600 * 1000;      //订阅缓存1天
 const subCache = new Map();
 const RANDOM_IPV6_COUNT = 2;                  // 每个前缀生成 2 个随机 IP
 const PREFIX_CACHE_TTL = 24 * 3600 * 1000;       // 前缀缓存24小时
@@ -927,9 +928,29 @@ function injectEnhanceDefaults(params, mandatoryValue) {
  * 日志系统
  */
 async function handleLogsRequest() {
+    // 初始化 Worker 启动时间
+    if (workerStartTime === 0) {
+        workerStartTime = Date.now();
+    }
     await ensureCNDomainSet();
+
     const now = Date.now();
-    // ---------- CN 列表状态 ----------
+
+    // ==================== Worker 运行信息 ====================
+    const uptimeMs = now - workerStartTime;
+    const uptimeSeconds = Math.floor(uptimeMs / 1000);
+    const hours = Math.floor(uptimeSeconds / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const seconds = uptimeSeconds % 60;
+    const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
+
+    const runtime = {
+        _description: 'Worker 运行信息',
+        uptime: uptimeFormatted,
+        startedAt: new Date(workerStartTime).toISOString(),
+    };
+
+    // ==================== 国内域名列表 (CN List) ====================
     const cnList = {
         _description: '国内域名列表加载状态',
         domainCount: cnDomainSet ? cnDomainSet.size : 0,
@@ -940,15 +961,29 @@ async function handleLogsRequest() {
         sourceUrl: CN_DOMAIN_LIST_URL,
         ttl: CN_DOMAIN_CACHE_TTL / 1000 / 3600 + '小时',
     };
-    // ---------- 缓存状态 ----------
+
+    // ==================== 缓存状态 (Cache Status) ====================
     const echKey = 'ech:cloudflare-ech.com';
     const cacheStatus = {
-        _description: '配置缓存状态概览',
-        echCache: cacheMap.has(echKey) ? 'ECH配置已预热 (warm)' : 'ECH配置未预热 (cold)',
-        ownerCacheSize: cacheMap.size,
-        subCacheCount: subCache.size,
+        _description: '内存 & Cache API 双重缓存状态',
+        // 内存缓存部分
+        memory: {
+            echCache: cacheMap.has(echKey) ? '已预热 (warm)' : '未预热 (cold)',
+            ownerCacheSize: cacheMap.size,
+            subCacheCount: subCache.size,
+            hostsCacheCount: hostsCache.size,
+            prefixCacheCount: prefixCache.size,
+        },
+        // Cache API 部分
+        edgeCache: {
+            ech: cacheMap.has(echKey) ? '已缓存 (cached)' : '未缓存 (empty)',
+            sub: Array.from(subCache.keys()).length > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
+            cn: cnDomainSet && cnDomainSet.size > 1000 ? '已缓存 (cached)' : '未缓存 (empty)',
+            hosts: Array.from(hostsCache.keys()).length > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
+        }
     };
-    // ---------- 订阅缓存详情 ----------
+
+    // 订阅缓存详情
     const subDetails = [];
     for (const [url, entry] of subCache.entries()) {
         subDetails.push({
@@ -958,7 +993,8 @@ async function handleLogsRequest() {
             contentLength: entry.content ? entry.content.length : 0,
         });
     }
-    // ---------- 全局参数默认值 ----------
+
+    // ==================== 全局参数默认值 ====================
     const globalDefaults = {
         _description: '全局参数默认值',
         best: 'false (非静态域名跟随优选)',
@@ -968,24 +1004,12 @@ async function handleLogsRequest() {
         alpn: 'h3,h2 (ALPN 列表)',
         mandatory: 'alpn (强制参数)',
     };
-    // ---------- Worker 运行信息 ----------
-    const startedTimestamp = cnDomainLastFetch || Date.now();
-    const uptimeMs = Date.now() - startedTimestamp;
-    const uptimeSeconds = Math.floor(uptimeMs / 1000);
-    const hours = Math.floor(uptimeSeconds / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const seconds = uptimeSeconds % 60;
-    const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
-    const runtime = {
-    _description: 'Worker 运行信息',
-    uptime: uptimeFormatted,
-    startedAt: new Date(startedTimestamp).toISOString(),
-    };
-    // ---------- 内置增强规则 (BUILTIN_HINTS) ----------
+
+    // ==================== 内置增强规则 (BUILTIN_HINTS) ====================
     const builtinRules = {};
     for (const [domain, rule] of Object.entries(BUILTIN_HINTS)) {
         builtinRules[domain] = {
-            domains: rule.domains||[],
+            domains: rule.domains || [],
             ips: rule.ips || (Array.isArray(rule) ? rule : []),
             noA: rule.noA || false,
             noAAAA: rule.noAAAA || false,
@@ -995,19 +1019,20 @@ async function handleLogsRequest() {
         _description: '内置增强规则 (BUILTIN_HINTS)',
         rules: builtinRules,
     };
-    // ---------- 组装响应 ----------
-    
+
+    // ==================== 组装最终响应 ====================
     const payload = {
         timestamp: new Date(now).toISOString(),
         runtime: runtime,
         cnList: cnList,
-        cacheStatus: cacheStatus,
+        caches: cacheStatus,
         subCache: subDetails,
         globalDefaults: globalDefaults,
-        builtinHints: builtinHints
+        rules: builtinHints,
     };
+
     return json(payload);
- }
+}
 
 /**
  * Fisher-Yates 洗牌算法
