@@ -97,7 +97,7 @@ const CN_DOMAIN_SUFFIXES = ['jd.com','meituan.com','taobao.com', '.cn', '.com.cn
 // ===================== 缓存逻辑 =====================
 let cnDomainSet = null;
 let cnDomainLastFetch = 0;
-globalThis._workerStartTime = globalThis_workerStartTime || Date.now();
+globalThis.__workerStartTime = globalThis.__workerStartTime || Date.now();
 const CN_DOMAIN_CACHE_TTL = 7 * 24 * 3600 * 1000;   // 每7天更新CN列表
 const cacheMap = new Map();
 const CACHE_TTL = 7 * 24 * 3600 * 1000;         //归属探测缓存7天
@@ -943,7 +943,7 @@ async function handleLogsRequest() {
 
         // ==================== Worker 运行信息 ====================
         // 使用顶层常量 workerStartTime，若未初始化则用当前时间兜底
-        const startTime = globalThis_workerStartTime;
+        const startTime = globalThis.__workerStartTime;
         const uptimeMs = now - startTime;
         const uptimeSeconds = Math.floor(uptimeMs / 1000);
         const hours = Math.floor(uptimeSeconds / 3600);
