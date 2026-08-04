@@ -97,7 +97,7 @@ const CN_DOMAIN_SUFFIXES = ['jd.com','meituan.com','taobao.com', '.cn', '.com.cn
 // ===================== 缓存逻辑 =====================
 let cnDomainSet = null;
 let cnDomainLastFetch = 0;
-let workerStartTime = 0;
+let workerStartTime = Date.now();
 const CN_DOMAIN_CACHE_TTL = 7 * 24 * 3600 * 1000;   // 每7天更新CN列表
 const cacheMap = new Map();
 const CACHE_TTL = 7 * 24 * 3600 * 1000;         //归属探测缓存7天
@@ -928,13 +928,16 @@ function injectEnhanceDefaults(params, mandatoryValue) {
  * 日志系统
  */
 async function handleLogsRequest() {
-    // 初始化 Worker 启动时间
-    if (workerStartTime === 0) {
-        workerStartTime = Date.now();
-    }
     await ensureCNDomainSet();
-
     const now = Date.now();
+
+    // 辅助：毫秒时间戳 → 东八区 ISO 字符串
+    const toBeijingTime = (ts) => {
+        const d = new Date(ts);
+        const offset = 8 * 60; // 东八区偏移分钟数
+        const local = new Date(d.getTime() + offset * 60 * 1000);
+        return local.toISOString().replace('Z', '+08:00');
+    };
 
     // ==================== Worker 运行信息 ====================
     const uptimeMs = now - workerStartTime;
@@ -947,14 +950,14 @@ async function handleLogsRequest() {
     const runtime = {
         _description: 'Worker 运行信息',
         uptime: uptimeFormatted,
-        startedAt: new Date(workerStartTime).toISOString(),
+        startedAt: toBeijingTime(workerStartTime),
     };
 
     // ==================== 国内域名列表 (CN List) ====================
     const cnList = {
         _description: '国内域名列表加载状态',
         domainCount: cnDomainSet ? cnDomainSet.size : 0,
-        lastFetch: cnDomainLastFetch ? new Date(cnDomainLastFetch).toISOString() : null,
+        lastFetch: cnDomainLastFetch ? toBeijingTime(cnDomainLastFetch) : null,
         nextFetchIn: cnDomainLastFetch
             ? Math.max(0, CN_DOMAIN_CACHE_TTL - (now - cnDomainLastFetch)) / 1000 + 's'
             : 'expired',
@@ -962,11 +965,10 @@ async function handleLogsRequest() {
         ttl: CN_DOMAIN_CACHE_TTL / 1000 / 3600 + '小时',
     };
 
-    // ==================== 缓存状态 (Cache Status) ====================
+    // ==================== 缓存状态 ====================
     const echKey = 'ech:cloudflare-ech.com';
     const cacheStatus = {
         _description: '内存 & Cache API 双重缓存状态',
-        // 内存缓存部分
         memory: {
             echCache: cacheMap.has(echKey) ? '已预热 (warm)' : '未预热 (cold)',
             ownerCacheSize: cacheMap.size,
@@ -974,12 +976,11 @@ async function handleLogsRequest() {
             hostsCacheCount: hostsCache.size,
             prefixCacheCount: prefixCache.size,
         },
-        // Cache API 部分
         edgeCache: {
             ech: cacheMap.has(echKey) ? '已缓存 (cached)' : '未缓存 (empty)',
-            sub: Array.from(subCache.keys()).length > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
+            sub: subCache.size > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
             cn: cnDomainSet && cnDomainSet.size > 1000 ? '已缓存 (cached)' : '未缓存 (empty)',
-            hosts: Array.from(hostsCache.keys()).length > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
+            hosts: hostsCache.size > 0 ? '已缓存 (cached)' : '未缓存 (empty)',
         }
     };
 
@@ -988,7 +989,7 @@ async function handleLogsRequest() {
     for (const [url, entry] of subCache.entries()) {
         subDetails.push({
             url: url,
-            cachedAt: new Date(entry.expire - SUB_CACHE_TTL).toISOString(),
+            cachedAt: toBeijingTime(entry.expire - SUB_CACHE_TTL),
             expiresIn: Math.max(0, (entry.expire - now) / 1000).toFixed(0) + 's',
             contentLength: entry.content ? entry.content.length : 0,
         });
@@ -1007,13 +1008,39 @@ async function handleLogsRequest() {
 
     // ==================== 内置增强规则 (BUILTIN_HINTS) ====================
     const builtinRules = {};
-    for (const [domain, rule] of Object.entries(BUILTIN_HINTS)) {
-        builtinRules[domain] = {
-            domains: rule.domains || [],
-            ips: rule.ips || (Array.isArray(rule) ? rule : []),
-            noA: rule.noA || false,
-            noAAAA: rule.noAAAA || false,
-        };
+    if (Array.isArray(BUILTIN_HINTS)) {
+        BUILTIN_HINTS.forEach((group, index) => {
+            const groupInfo = {
+                noA: group.noA || false,
+                noAAAA: group.noAAAA || false,
+                ips: group.ips || [],
+                domains: group.domains || [],
+                hosts: group.hosts || []
+            };
+            if (group.domains && Array.isArray(group.domains)) {
+                group.domains.forEach(domain => {
+                    builtinRules[domain] = groupInfo;
+                });
+            }
+            if (group.hosts && Array.isArray(group.hosts)) {
+                group.hosts.forEach(hostUrl => {
+                    builtinRules[`_hosts_${index}_${hostUrl}`] = {
+                        ...groupInfo,
+                        type: 'hosts-source',
+                        url: hostUrl
+                    };
+                });
+            }
+        });
+    } else {
+        for (const [domain, val] of Object.entries(BUILTIN_HINTS)) {
+            builtinRules[domain] = {
+                domains: [domain],
+                ips: Array.isArray(val) ? val : (val.ips || []),
+                noA: val.noA || false,
+                noAAAA: val.noAAAA || false
+            };
+        }
     }
     const builtinHints = {
         _description: '内置增强规则 (BUILTIN_HINTS)',
@@ -1022,7 +1049,7 @@ async function handleLogsRequest() {
 
     // ==================== 组装最终响应 ====================
     const payload = {
-        timestamp: new Date(now).toISOString(),
+        timestamp: toBeijingTime(now),
         runtime: runtime,
         cnList: cnList,
         caches: cacheStatus,
