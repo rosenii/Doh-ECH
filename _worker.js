@@ -1442,8 +1442,9 @@ async function resolveFallbackRecord(domain, type, clientIP, upstreamUrl = null)
  * 第一次调用时立即用内置后缀构建集合，后续异步拉取远程列表，不阻塞请求。
  */
 async function ensureCNDomainSet() {
+    const now = Date.now();
     // 已有有效缓存，直接返回
-    if (cnDomainSet && (Date.now() - cnDomainLastFetch) < CN_DOMAIN_CACHE_TTL) {
+    if (cnDomainSet && ( now - cnDomainLastFetch) < CN_DOMAIN_CACHE_TTL) {
         return;
     }
     // 2. 从Cache API读取（新增）
