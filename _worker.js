@@ -644,32 +644,52 @@ async function getBuiltinRulesMap() {
             if (group.hosts && Array.isArray(group.hosts)) {
                 const noA = group.noA || false;
                 const noAAAA = group.noAAAA || false;
-                const hostIpsMap = new Map();   // domain → Set of ips
+                const hostIpsMap = new Map();
 
                 for (const url of group.hosts) {
                     let data = null;
+                    const cacheKey = `https://dns-cache/hosts/${encodeURIComponent(url)}`;
                     const cached = hostsCache.get(url);
 
+                    // 1. 内存缓存命中
                     if (cached && Date.now() < cached.expire) {
                         data = cached.data;
                     } else {
-                        try {
-                            const controller = new AbortController();
-                            const timer = setTimeout(() => controller.abort(), 5000);
-                            const res = await fetch(url, { signal: controller.signal });
-                            clearTimeout(timer);
-                            if (res.ok) {
-                                data = await res.json();
-                                hostsCache.set(url, {
-                                    data: data,
-                                    expire: Date.now() + HOSTS_CACHE_TTL
-                                });
-                            } else if (cached) {
-                                data = cached.data;
+                        // 2. Cache API 读取（新增）
+                        const cachedText = await readCache(cacheKey);
+                        if (cachedText) {
+                            try {
+                                data = JSON.parse(cachedText);
+                                hostsCache.set(url, { data, expire: Date.now() + HOSTS_CACHE_TTL });
+                            } catch (e) {
+                                data = null;
                             }
-                        } catch (e) {
-                            console.error('Fetch hosts error:', url, e);
-                            if (cached) data = cached.data;
+                        }
+                        
+                        // 3. Cache API 未命中，远程下载（原逻辑）
+                        if (!data) {
+                            try {
+                                const controller = new AbortController();
+                                const timer = setTimeout(() => controller.abort(), 5000);
+                                const res = await fetch(url, { signal: controller.signal });
+                                clearTimeout(timer);
+                                if (res.ok) {
+                                    data = await res.json();
+                                    // 写入内存缓存
+                                    hostsCache.set(url, {
+                                        data: data,
+                                        expire: Date.now() + HOSTS_CACHE_TTL
+                                    });
+                                    // 异步写入 Cache API（新增）
+                                    writeCache(cacheKey, JSON.stringify(data), HOSTS_CACHE_TTL / 1000);
+                                } else if (cached) {
+                                    // 下载失败，使用过期内存缓存
+                                    data = cached.data;
+                                }
+                            } catch (e) {
+                                console.error('Fetch hosts error:', url, e);
+                                if (cached) data = cached.data;
+                            }
                         }
                     }
 
@@ -691,7 +711,6 @@ async function getBuiltinRulesMap() {
                     }
                 }
 
-                // 将收集到的域名-IP写入 map
                 for (const [domain, ipSet] of hostIpsMap.entries()) {
                     const ips = Array.from(ipSet);
                     map.set(domain, { ips, noA, noAAAA });
@@ -710,7 +729,6 @@ async function getBuiltinRulesMap() {
             }
         }
     } else {
-        // 兼容旧的对象式写法
         for (const [domain, val] of Object.entries(hints)) {
             map.set(domain, {
                 ips: Array.isArray(val) ? val : (val.ips || []),
@@ -719,7 +737,6 @@ async function getBuiltinRulesMap() {
             });
         }
     }
-
     builtinRulesMap = map;
     return map;
 }
@@ -870,6 +887,24 @@ function parseIpList(raw, doShuffle = true) {
     }
     if (doShuffle) return shuffle(arr);
     return arr;
+}
+/**
+ * cacheAPI R&W
+ */
+async function readCache(cacheKey) {
+    try {
+        const res = await caches.default.match(cacheKey);
+        if (res) return await res.text();
+    } catch (e) {}
+    return null;
+}
+async function writeCache(cacheKey, text, ttlSeconds) {
+    try {
+        const response = new Response(text, {
+            headers: { 'Cache-Control': `public, max-age=${ttlSeconds}` }
+        });
+        await caches.default.put(cacheKey, response);
+    } catch (e) {}
 }
 
 /**
@@ -1086,12 +1121,25 @@ async function queryUpstreamDNS(name, type, clientIP = '',upstreamUrl = null) {
  */
 async function fetchRealEch(echDomain, clientIP) {
     const cacheKey = `ech:${echDomain}`;
+    const cacheUrl = `https://dns-cache/${cacheKey}`;
+    // 1. 内存缓存
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
+    // 2. Cache API（新增）
     try {
-          // 首次尝试
+        const cachedText = await readCache(cacheUrl);
+        if (cachedText) {
+            const data = JSON.parse(cachedText);
+            if (data && data.ech) {
+                cacheMap.set(cacheKey, { value: data.ech, expire: Date.now() + ECH_CACHE_TTL });
+                return data.ech;
+            }
+        }
+    } catch (e) {}
+    // 3. 上游查询（原有逻辑）
+    try {
         let data = await queryUpstreamDNS(echDomain, 65, clientIP);
-        if (!data) {// 失败后等待 500ms，再试一次
+        if (!data) {
             await new Promise(r => setTimeout(r, 500));
             data = await queryUpstreamDNS(echDomain, 65, clientIP);
         }
@@ -1101,6 +1149,8 @@ async function fetchRealEch(echDomain, clientIP) {
                 const parsed = parseHttpsRecord(rec.data);
                 if (parsed && parsed.ech) {
                     cacheMap.set(cacheKey, { value: parsed.ech, expire: Date.now() + ECH_CACHE_TTL });
+                    // 异步写入 Cache API（新增）
+                    writeCache(cacheUrl, JSON.stringify({ ech: parsed.ech }), ECH_CACHE_TTL / 1000);
                     return parsed.ech;
                 }
             }
@@ -1390,7 +1440,19 @@ async function ensureCNDomainSet() {
     if (cnDomainSet && (Date.now() - cnDomainLastFetch) < CN_DOMAIN_CACHE_TTL) {
         return;
     }
-
+    // 2. 从Cache API读取（新增）
+    const cacheKey = `https://dns-cache/cn/domains`;
+    const cachedText = await readCache(cacheKey);
+    if (cachedText) {
+        const domains = new Set(CN_DOMAIN_SUFFIXES);
+        for (const line of cachedText.split(/\r?\n/)) {
+            const d = line.trim();
+            if (d && !d.startsWith('#')) domains.add(d);
+        }
+        cnDomainSet = domains;
+        cnDomainLastFetch = now;
+        return;
+    }
     // 如果集合为空，先用内置后缀创建临时集合，保证匹配立即可用
     if (!cnDomainSet) {
         cnDomainSet = new Set(CN_DOMAIN_SUFFIXES);
@@ -1411,6 +1473,8 @@ async function ensureCNDomainSet() {
             }
             cnDomainSet = domains;
             cnDomainLastFetch = Date.now();
+            // 异步写入 Cache API（新增）
+            writeCache(cacheKey, text, CN_DOMAIN_CACHE_TTL / 1000);
         }
     } catch (e) {
         // 远程加载失败，继续使用现有集合（临时内置集合或上次缓存）
@@ -1674,27 +1738,38 @@ function isIpInCidrs(ip, compiled) {
 // ===================== 归属探测 =====================
 async function activeProbeOwner(domain, ctx, clientIP) {
     const cacheKey = `owner:${domain}`;
+    const cacheUrl = `https://dns-cache/${cacheKey}`;
+
+    // 1. 内存缓存
     const cached = cacheMap.get(cacheKey);
     if (cached && Date.now() < cached.expire) return cached.value;
+
+    // 2. Cache API（新增）
     try {
-        // 第一次尝试
-        let data = await queryUpstreamDNS(domain, 1, clientIP);   
-        // 如果失败，等待 500ms 后重试一次
-        if (!data || !data.Answer) {
-            await new Promise(r => setTimeout(r, 500));
-            data = await queryUpstreamDNS(domain, 1, clientIP);
+        const cachedText = await readCache(cacheUrl);
+        if (cachedText) {
+            const result = JSON.parse(cachedText);
+            cacheMap.set(cacheKey, { value: result, expire: Date.now() + CACHE_TTL });
+            return result;
         }
+    } catch (e) {}
+
+    // 3. 上游查询（原有逻辑）
+    try {
+        const data = await queryUpstreamDNS(domain, 1, clientIP);
         if (data && data.Answer) {
             const ips = data.Answer.filter(r => r.type === 1).map(r => r.data);
             for (const ip of ips) {
                 if (isIpInCidrs(ip, getCompiledMeta())) {
                     const result = { owner: 'META', ips };
                     cacheMap.set(cacheKey, { value: result, expire: Date.now() + CACHE_TTL });
+                    writeCache(cacheUrl, JSON.stringify(result), CACHE_TTL / 1000); // 异步写入
                     return result;
                 }
                 if (isIpInCidrs(ip, getCompiledCF())) {
                     const result = { owner: 'CF', ips };
                     cacheMap.set(cacheKey, { value: result, expire: Date.now() + CACHE_TTL });
+                    writeCache(cacheUrl, JSON.stringify(result), CACHE_TTL / 1000); // 异步写入
                     return result;
                 }
             }
@@ -1739,11 +1814,20 @@ async function applySubConfig(config) {
         if (!match) continue;
         const [, type, url] = match;
         let content = null;
+        const cacheKey = `https://dns-cache/sub/${encodeURIComponent(url)}`;
         const cached = subCache.get(url);
+        // 1. 内存缓存
         if (cached && Date.now() < cached.expire) {
             content = cached.content;
         } else {
+            // 2. Cache API（新增）
+            const cachedText = await readCache(cacheKey);
+            if (cachedText) {
+                content = cachedText;
+                subCache.set(url, { content, expire: Date.now() + SUB_CACHE_TTL });
+            } else {
             try {
+               // 3. 远程下载（原有逻辑）
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 5000);
                 const res = await fetch(url, { signal: controller.signal });
@@ -1751,12 +1835,18 @@ async function applySubConfig(config) {
                 if (res.ok) {
                     content = await res.text();
                     subCache.set(url, { content, expire: Date.now() + SUB_CACHE_TTL });
+                     // 异步写入 Cache API（新增）
+                    writeCache(cacheKey, content, SUB_CACHE_TTL / 1000);
                 } else if (cached) {
                     content = cached.content;
+                    cached.expire = Date.now() + SUB_CACHE_TTL; // 延长过期时间                
                 }
             } catch (e) {
                 console.error('sub fetch error:', e);
-                if (cached) content = cached.content;
+                if (cached){ 
+                    content = cached.content;
+                    cached.expire = Date.now() + SUB_CACHE_TTL;
+                }   
                 else continue;
             }
         }
