@@ -127,7 +127,7 @@ function buildConfig(url, headers = null) {
         echDomain: get('ech', 'X-ECH') || 'cloudflare-ech.com',
         best: get('best', 'X-Best') || 'false', sub: get('sub', 'X-Sub'),
         exclude: get('exclude', 'X-Exclude'), shuffle: get('shuffle', 'X-Shuffle') || 'true',
-        area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'rule',
+        area: get('area', 'X-Area'), enhance: get('enhance', 'X-Enhance') || 'off',
         rules: get('rules', 'X-Rules'), alpn: get('alpn', 'X-Alpn') || 'h3,h2',
         clientIp: get('clientIp', 'X-ClientIP') || '',
         no6: get('no6', 'X-No6') || 'false',   
