@@ -12,6 +12,7 @@
  * - exclude 过滤排除不合适的优选ip/domain
  * - shuffle  返回记录随机乱序开关 默认true
  * - area    返回订阅列表指定区域的ip记录 格式： hk,sg,电信,移动,us
+ * - nocf6 全局屏蔽cloudflare站点的ipv6
  * - no6  全局屏蔽AAAA记录 默认false
  * - enhance (off/rule/full),rule：按rules参数规则返回,full:为所有非CF/Meta站点开启
  * *  - alpn ［h3］非CF/META站点-仅在enhance开启时生效 | CF/META站点-全局生效
@@ -284,7 +285,7 @@ async function resolveDNS(domain, type, config, clientIP) {
 // A/AAAA 处理    
     if (type === 'A' || type === 'AAAA') {
      // 独立控制的CF站点禁用IPv6 默认即禁用（可通过 nocf6=false 关闭）
-        if (type === 'AAAA' && config.nocf6 !== 'false' && effectiveCF) {
+        if (type === 'AAAA' && config.nocf6 !== 'false' && (effectiveCF || owner === 'CF')) {
            return { domain, type, answers: [], ech: null };
         }     
      // 全局 IPv6 屏蔽 (no6) 对静态域名也生效
