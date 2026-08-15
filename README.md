@@ -7,7 +7,8 @@
      
  **2.利用QUIC Client Initial 分片**: 
      Chrome/Firefox以及代理客户端等多已支持，为支持quic协议的网站返回alpn=h3，为指定站点返回alpn:h3,仅ipv6hints的HTTPS记录并屏蔽A记录等 实现直连访问受阻网站
-     
+
+> **支持情况**： CF站点（含X.com),Meta系App,Google系(含YouTube),reddit,twitch,discord,onlyfans等支持h3的所有网站 
 ---
 ## 警告
 本项目由AI生成，仅供娱乐目的， **不得用于非法用途，请遵守当地法律法规合理学习和使用**，用于违反当地法律法规的非法用途造成的后果与本人本项目无关！
