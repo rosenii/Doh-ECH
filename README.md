@@ -1,4 +1,12 @@
-# DOH-ECH ：私人DOH服务器+HTTPS RR控制器 + ECH注入器
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/rosenii/imgs/refs/heads/main/file_00000000f0b4820687394878b7cece86.png" width="180">
+
+**DOH-ECH ：私人DOH服务器+HTTPS RR控制器 + ECH注入器**
+
+[![Telegram](https://img.shields.io/badge/Telegram-Community-26A5E4?logo=telegram&logoColor=white)](https://t.me/doh_ech)
+
+</div>
 
  **个人 DNS-over-HTTPS (DoH) 服务器**:
  
