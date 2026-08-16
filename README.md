@@ -7,8 +7,6 @@
 [![Telegram](https://img.shields.io/badge/Telegram-Community-26A5E4?logo=telegram&logoColor=white)](https://t.me/doh_ech)
 
 </div>
-
- **个人 DNS-over-HTTPS (DoH) 服务器**:
  
  **1.基于ECH拓展**： 
      智能为 Cloudflare / Meta 站点HTTPS RR 注入 ECH 配置 实现直连访问受阻网站
