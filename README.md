@@ -166,7 +166,33 @@ Cloudflare Worker
   -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址设置：`https://你的域名/ech`，并可通过 URL 参数传递自定义内容。
 
   
-  -- 使用代理工具：将需要直连的CF站点的域名解析服务器doh设置为`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义内容。
+  -- 使用代理工具：将需要直连的CF站点的域名解析服务器doh设置为`https://你的域名/ech`，并可通过请求头或 URL 参数传递自定义内容：
+  ```javascript
+  sing-box1.14配置示例：
+        {
+        "type": "h3",
+        "tag": "dns_ech",
+        "server": "自选优选ip或your pages domain",
+        "path": "/ech",            
+        "domain_resolver": "dns_direct",    
+        "tls": {
+          "enabled": true,
+          "server_name": "your pages domain",
+          "ech": {
+            "enabled": true,
+            "query_server_name": "cloudflare-ech.com"
+          }
+        },
+        "headers": {
+          "X-Alpn": "h3,h2",
+          "X-Best": "true",
+          "X-Enhance": "full",
+          "X-No6": "true",
+          "X-Sub": "cf-https://bestcf.pages.dev/vps789/top10.txt"
+        }
+      }
+  
+```
 ---
 ## 注意事项
 - **子请求上限**：免费计划每日 10 万次子请求，已通过缓存降低使用量，正常个人使用一般不会超出。
