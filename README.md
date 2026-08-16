@@ -190,10 +190,8 @@ Cloudflare Worker
           "X-No6": "true",
           "X-Sub": "cf-https://bestcf.pages.dev/vps789/top10.txt"
         }
-      }
-  
-```
----
+      }  
+  ```
 ## 注意事项
 - **子请求上限**：免费计划每日 10 万次子请求，已通过缓存降低使用量，正常个人使用一般不会超出。
 - **ECH 有效性**：Meta 的 ECH 为固定配置（可能会过期），Cloudflare 的 ECH 从指定域名动态获取，可自定义 `ech` 参数。
