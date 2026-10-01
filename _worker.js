@@ -26,11 +26,11 @@ const UPSTREAM_DNS_CUSTOM = 'https://dns11.quad9.net/dns-query';//自行更换
 const UPSTREAM_JSON_CUSTOM = 'https://dns11.quad9.net/dns-query';
 const UPSTREAM_CN_JSON = 'https://dns.alidns.com/resolve';// 国内上游 DNS（阿里 DNS JSON API，仅用于国内域名）
 const SVC_PARAM_IDS = { mandatory: 0, alpn: 1, "no-default-alpn": 2, port: 3, ipv4hint: 4, ech: 5, ipv6hint: 6};// SVC PARAMS构造
-const IPV4_ONLY_DOMAINS = ["twitter.com", "x.com", "t.co"];//只支持ipv4的CF/META域名列表：不返回AAAA记录和ipv6hint
+const IPV4_ONLY_DOMAINS = ["twitter.com", "twimg.com","x.com", "t.co"];//只支持ipv4的CF/META域名列表：不返回AAAA记录和ipv6hint
 //Cloudflare 配置
 const DEFAULT_CF_IP = "104.18.10.118";//默认CF优选IPv4
 const DEFAULT_CF_IP6 = "";//默认CF优选IPv6
-const CF_STATIC_DOMAINS = [ "twitter.com", "x.com", "t.co","cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"];//不查询-直接返回优选结果的CF域名列表
+const CF_STATIC_DOMAINS = [ "twitter.com", "x.com","twimg.com", "t.co","cloudflare-dns.com", "pages.dev", "workers.dev", "cloudflare.com"];//不查询-直接返回优选结果的CF域名列表
 //Meta 配置
 const DEFAULT_META_IP = "";//默认META优选IP
 const META_DOMAINS = ["facebook.com", "messenger.com", "instagram.com","whatsapp.com", "fb.com","meta.ai", "meta.com"];//不查询-直接返回优选结果的META域名列表
