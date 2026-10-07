@@ -43,12 +43,11 @@ const BUILTIN_HINTS = [
         noA:false, noAAAA: true
     },
     {
-        //Gemini屏蔽ipv6- 分流
+        //Gemini 屏蔽ipv6-  此列表域名 分流需走非大陆及港澳的其他地区代理
         domains:["*.robinfrontend-pa.googleapis.com","*.lens-pa.googleapis.com","*.signaler-pa.googleapis.com"],
         ips:[],
         noA:false,
-        noAAAA:true
-        
+        noAAAA:true       
     },
     {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
