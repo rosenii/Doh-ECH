@@ -44,7 +44,7 @@ const BUILTIN_HINTS = [
     },
     {
         //Gemini、YouTubeMusic 屏蔽国内ipv6-  此列表域名 分流需走非大陆及港澳的其他地区代理
-        domains:["*.music.youtube.com","*.robinfrontend-pa.googleapis.com","*.signaler-pa.googleapis.com"],
+        domains:["*.robinfrontend-pa.googleapis.com","*.signaler-pa.googleapis.com"],
         ips:[],
         noA:false,
         noAAAA:true       
