@@ -43,6 +43,14 @@ const BUILTIN_HINTS = [
         noA:false, noAAAA: true
     },
     {
+        //Gemini屏蔽ipv6- 分流
+        domains:["*.robinfrontend-pa.googleapis.com","*.lens-pa.googleapis.com","*.signaler-pa.googleapis.com"],
+        ips:[],
+        noA:false,
+        noAAAA:true
+        
+    },
+    {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
         domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.services.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.googleapis.cn","*.recaptcha.net"],
         ips: ["2001:4860:4826:7700::/64", "2001:4860:4827:7700::/64", "2001:4860:4828:7700::/64", "2001:4860:4829:7700::/64", "2001:4860:482a:7700::/64", "2001:4860:482b:7700::/64", "2001:4860:482c:7700::/64", "2001:4860:482d:7700::/64"],
