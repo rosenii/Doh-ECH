@@ -45,10 +45,17 @@ const BUILTIN_HINTS = [
     {
         //Gemini、YouTubeMusic 屏蔽国内ipv6-  此列表域名 分流需走非大陆及港澳的其他地区代理
         domains:["*.music.youtube.com","*.robinfrontend-pa.googleapis.com","*.signaler-pa.googleapis.com"],
-        ips:[],
+        ips:[],//自动上游获取
         noA:false,
         noAAAA:true       
     },
+    {
+        //FCM 推送
+        domains:["mobile-gtalk.l.google.com","alt7-mtalk.google.com", "alt8-mtalk.google.com", "mtalk-dev.google.com",  "mtalk-staging.google.com",  "mtalk4.google.com",  "alt1-mtalk.google.com", "alt2-mtalk.google.com", "alt3-mtalk.google.com","alt4-mtalk.google.com", "alt5-mtalk.google.com", "alt6-mtalk.google.com","mtalk.google.com"],
+        ips:[],
+        noA:false,
+        noAAAA:false       
+    },    
     {
         // GWS (Google Web Server) 分类组：承载网页主体、核心搜索 API、人机验证和账户安全登录 && GGC
         domains: [ "*.google.com.hk", "*.google.com","*.googleapis.com", "*.services.googleapis.cn", "*.services.google.com", "*.accounts.google.com","*.youtube.com", "*.youtube-nocookie.com", "*.googleapis.cn","*.recaptcha.net"],
