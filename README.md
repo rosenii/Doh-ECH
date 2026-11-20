@@ -53,10 +53,7 @@
   ```
    "https://your_pages_domain/ech?ip4=优选ip1，ip2&ip6=ip3,ip4&best=true&enhance=full"
   ```
-- **公益doh地址**：  
-  ```
-   "https://dohs.pages.dev/ech?cf=polestar.com&best=true&enhance=full"
-  ```  
+
 - **配置 DoH 客户端**：  
   -- 将支持ECH的浏览器如Chrome/Firefox 的安全DNS设置为 DoH 地址：`https://你的域名/ech`，并可通过 URL 参数传递自定义内容。
 
